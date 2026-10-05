@@ -66,7 +66,8 @@ Variante alternativa a soportar: 4 reyes / 4 ases.
 - Haz un commit con un mensaje claro y descriptivo al terminar cada tarea que funcione.
 
 ## Estado actual
-- **Fase 1 – terminada, pendiente del visto bueno del usuario.** Paquete `src/mus` (reglas, cartas, evaluacion, tablas, simulacion, analisis) + CLI (`evaluar`, `resolver`, `distribucion`, `verificar`, `tabla`, `grafica`). 124 tests en verde. Valores de referencia comprobados: P(≥1 Rey) = 0,606522; P(pares) = 0,565817; P(juego) = 0,267469.
+- **Fase 1 – terminada y aprobada.** Paquete `src/mus` (reglas, cartas, evaluacion, tablas, simulacion, analisis) + CLI (`evaluar`, `resolver`, `distribucion`, `verificar`, `tabla`, `grafica`). 134 tests en verde. Valores de referencia comprobados: P(≥1 Rey) = 0,606522; P(pares) = 0,565817; P(juego) = 0,267469.
 - Entorno: Python 3.14 en `.venv` (`pip install -e ".[dev]"`). Las salidas generadas van a `resultados/` (ignorado por git).
 - Reglas confirmadas y diseño: ver `docs/decisiones.md`.
-- Pendiente para la Fase 2: el punto debe filtrarse aparte en el código vectorizado (solo se juega si nadie en la mesa tiene juego).
+- Para resolver lances de forma vectorizada usar `simulacion.ganadores_lance` (aplica el filtro del punto; repartos siempre en orden de juego, columna 0 = mano).
+- **Fase 2 – plan propuesto, pendiente de confirmación.**

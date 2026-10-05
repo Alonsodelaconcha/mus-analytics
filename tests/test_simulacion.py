@@ -8,10 +8,13 @@ import numpy as np
 import pytest
 
 from mus.analisis import comparar_exacto_mc, metricas_por_mano
+from mus.cartas import parsear_mano as pm
+from mus.evaluacion import Lance, resolver_lance
 from mus.simulacion import (
     Estimacion,
     generador,
     ganadores,
+    ganadores_lance,
     intervalo_wilson,
     muestrear_manos,
     repartir,
@@ -107,6 +110,37 @@ class TestExactoVsMonteCarlo:
         assert chi2 < critico
 
 
-def test_ganadores_desempata_por_posicion():
-    fuerzas = np.array([[3, 5, 5, 1], [2, 2, 2, 2], [0, 0, 0, 0], [0, 0, 1, 1]])
-    np.testing.assert_array_equal(ganadores(fuerzas), [2, 1, 0, 3])
+class TestGanadoresVectorizados:
+    def test_desempata_por_posicion(self):
+        fuerzas = np.array([[3, 5, 5, 1], [2, 2, 2, 2], [0, 0, 1, 1], [0, 0, 0, 3]])
+        np.testing.assert_array_equal(ganadores(fuerzas), [2, 1, 3, 4])
+
+    def test_todas_las_fuerzas_a_cero_no_da_ganador(self):
+        """argmax de [0,0,0,0] es 0 (el jugador 1): debe corregirse a 'nadie'."""
+        np.testing.assert_array_equal(ganadores(np.zeros((3, 4), dtype=np.int16)), [0, 0, 0])
+
+    def test_nadie_con_pares_ni_juego_en_manos_reales(self, tabla):
+        manos = [pm(t) for t in ("R C 7 A", "R C 5 A", "R C 4 A", "A 4 5 6")]
+        reparto = np.array([[tabla.indice(m) for m in manos]])
+        assert ganadores_lance(tabla, reparto, Lance.PARES)[0] == 0
+        assert ganadores_lance(tabla, reparto, Lance.JUEGO)[0] == 0
+        assert ganadores_lance(tabla, reparto, Lance.PUNTO)[0] == 1   # 28 > 26 > 25 > 16
+
+    def test_punto_no_se_juega_si_alguien_tiene_juego(self, tabla):
+        manos = [pm(t) for t in ("R R 5 5", "A A A A", "A 4 5 6", "R C S A")]  # solo el 4 tiene juego
+        reparto = np.array([[tabla.indice(m) for m in manos]])
+        assert tabla.fuerza[Lance.PUNTO][reparto].max() > 0   # hay fuerzas de punto...
+        assert ganadores_lance(tabla, reparto, Lance.PUNTO)[0] == 0   # ...pero no se juega
+
+    @pytest.mark.parametrize("lance", list(Lance))
+    def test_coincide_con_la_resolucion_escalar(self, tabla, lance):
+        """Repartos reales: la versión vectorizada da el mismo ganador que
+        resolver_lance, con las columnas en orden de juego (0 = mano)."""
+        repartos = repartir(2_000, tabla, generador(SEMILLA))
+        vectorizado = ganadores_lance(tabla, repartos, lance)
+        for fila, g in zip(repartos, vectorizado):
+            r = resolver_lance([tabla.manos[i] for i in fila], lance)
+            assert g == (r.ganador or 0)
+        # sanidad: la muestra incluye repartos en los que el lance no se juega
+        if lance is not Lance.GRANDE and lance is not Lance.CHICA:
+            assert (vectorizado == 0).any()

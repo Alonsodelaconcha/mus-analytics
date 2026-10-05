@@ -33,6 +33,6 @@ Cada entrada recoge qué se decidió y por qué. Las más recientes van al final
 
 **Tests estadísticos deterministas.** Llevan semilla fija y un nivel del 99,9 % para que no fallen por azar. Además del test métrica a métrica, hay un χ² sobre las 330 frecuencias a la vez; el cuantil se aproxima con Wilson-Hilferty para no depender de SciPy.
 
-**El punto exige un filtro aparte.** Su fuerza es 0 en las manos con juego, pero el lance solo se juega si *nadie* en la mesa tiene juego. `resolver_lance` lo gestiona; el código vectorizado de la Fase 2 deberá filtrarlo explícitamente.
+**El punto exige un filtro aparte.** Su fuerza es 0 en las manos con juego, pero el lance solo se juega si *nadie* en la mesa tiene juego. `resolver_lance` lo gestiona en la versión escalar, y `ganadores_lance` en la vectorizada. Se añadió esta última al cerrar la fase, para que la Fase 2 no tenga que acordarse de aplicar el filtro. Un test comprueba con repartos reales que las dos versiones dan el mismo ganador en los cinco lances.
 
 **Riesgo identificado: `lru_cache` y argumentos por defecto.** `f()` y `f(ReglasMus())` generaban dos entradas de caché distintas. Se resolvió con una función interna cacheada que siempre recibe las reglas explícitas.

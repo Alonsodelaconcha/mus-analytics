@@ -224,9 +224,23 @@ class TestResolucion:
         assert (r.se_juega, r.ganador, r.pareja, r.tantos) == (True, 3, 1, 1)
         assert not resolver_lance(manos, Lance.JUEGO).se_juega
 
-    def test_nadie_con_pares(self):
+    def test_nadie_con_pares_no_hay_ganador(self):
         manos = [pm(t) for t in ("R C S 7", "R C S 6", "R C S 5", "A 4 5 6")]
-        assert not resolver_lance(manos, Lance.PARES).se_juega
+        r = resolver_lance(manos, Lance.PARES)
+        assert (r.se_juega, r.ganador, r.pareja, r.tantos) == (False, None, None, 0)
+
+    def test_nadie_con_juego_se_pasa_al_punto(self):
+        # sumas: 28, 26, 25, 15 -> nadie llega a 31
+        manos = [pm(t) for t in ("R C 7 A", "R C 5 A", "R C 4 A", "A 4 5 5")]
+        res = resolver_mano(manos)
+        j, p = res[Lance.JUEGO], res[Lance.PUNTO]
+        assert (j.se_juega, j.ganador, j.pareja, j.tantos) == (False, None, None, 0)
+        assert (p.se_juega, p.ganador, p.pareja, p.tantos) == (True, 1, 1, 1)
+
+    def test_solo_el_postre_participa(self):
+        """Si solo participa el último, gana él: nunca la mano por defecto."""
+        manos = [pm(t) for t in ("R C S 7", "R C S 6", "R C S 5", "A A 5 6")]
+        assert resolver_lance(manos, Lance.PARES).ganador == 4
 
     def test_puntuacion_configurable(self):
         reglas = ReglasMus(puntuacion=Puntuacion(duples=5, medias=4))

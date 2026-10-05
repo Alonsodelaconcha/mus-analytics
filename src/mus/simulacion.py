@@ -16,7 +16,7 @@ from statistics import NormalDist
 import numpy as np
 
 from mus.cartas import CARTAS_POR_MANO
-from mus.evaluacion import JUGADORES
+from mus.evaluacion import JUGADORES, Lance
 from mus.tablas import TablaManos, potencias_codigo
 
 TAMANO_LOTE = 250_000
@@ -119,8 +119,23 @@ def ganadores(fuerzas: np.ndarray) -> np.ndarray:
     repartos en que nadie participa (todas las fuerzas 0).
 
     Ojo con el punto: su fuerza es 0 en las manos con juego, pero el lance
-    solo se juega si *nadie* tiene juego; eso hay que filtrarlo aparte.
+    solo se juega si *nadie* tiene juego. Para resolver lances usa
+    :func:`ganadores_lance`, que ya aplica ese filtro.
     """
     ganador = fuerzas.argmax(axis=1) + 1
     ganador[fuerzas.max(axis=1) == 0] = 0
+    return ganador
+
+
+def ganadores_lance(tabla: TablaManos, repartos: np.ndarray, lance: Lance) -> np.ndarray:
+    """Posición ganadora (1-4) de un lance en cada reparto; 0 si no se juega.
+
+    ``repartos`` es un array (n, 4) de índices de mano **en orden de juego**
+    (columna 0 = mano, columna 3 = postre), como el que devuelve
+    :func:`repartir`. Es la versión vectorizada de
+    :func:`mus.evaluacion.resolver_lance` y aplica el filtro del punto.
+    """
+    ganador = ganadores(tabla.fuerza[lance][repartos])
+    if lance is Lance.PUNTO:
+        ganador[tabla.tiene_juego[repartos].any(axis=1)] = 0
     return ganador
