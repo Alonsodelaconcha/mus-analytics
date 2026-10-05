@@ -63,6 +63,7 @@ Variante alternativa a soportar: 4 reyes / 4 ases.
 - Señala riesgos, errores o alternativas más simples aunque contradigan lo decidido.
 - Registra las decisiones importantes (y sus motivos) en `docs/decisiones.md`.
 - Mantén actualizada la sección "Estado actual" de este archivo.
+- Haz un commit con un mensaje claro y descriptivo al terminar cada tarea que funcione.
 
 ## Estado actual
 - Fase 1 sin empezar.
