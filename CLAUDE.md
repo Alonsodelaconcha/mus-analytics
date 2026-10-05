@@ -66,4 +66,7 @@ Variante alternativa a soportar: 4 reyes / 4 ases.
 - Haz un commit con un mensaje claro y descriptivo al terminar cada tarea que funcione.
 
 ## Estado actual
-- Fase 1 sin empezar.
+- **Fase 1 – terminada, pendiente del visto bueno del usuario.** Paquete `src/mus` (reglas, cartas, evaluacion, tablas, simulacion, analisis) + CLI (`evaluar`, `resolver`, `distribucion`, `verificar`, `tabla`, `grafica`). 124 tests en verde. Valores de referencia comprobados: P(≥1 Rey) = 0,606522; P(pares) = 0,565817; P(juego) = 0,267469.
+- Entorno: Python 3.14 en `.venv` (`pip install -e ".[dev]"`). Las salidas generadas van a `resultados/` (ignorado por git).
+- Reglas confirmadas y diseño: ver `docs/decisiones.md`.
+- Pendiente para la Fase 2: el punto debe filtrarse aparte en el código vectorizado (solo se juega si nadie en la mesa tiene juego).
