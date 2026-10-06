@@ -36,3 +36,37 @@ Cada entrada recoge qué se decidió y por qué. Las más recientes van al final
 **El punto exige un filtro aparte.** Su fuerza es 0 en las manos con juego, pero el lance solo se juega si *nadie* en la mesa tiene juego. `resolver_lance` lo gestiona en la versión escalar, y `ganadores_lance` en la vectorizada. Se añadió esta última al cerrar la fase, para que la Fase 2 no tenga que acordarse de aplicar el filtro. Un test comprueba con repartos reales que las dos versiones dan el mismo ganador en los cinco lances.
 
 **Riesgo identificado: `lru_cache` y argumentos por defecto.** `f()` y `f(ReglasMus())` generaban dos entradas de caché distintas. Se resolvió con una función interna cacheada que siempre recibe las reglas explícitas.
+
+## 2026-10-06 · Fase 2: equity
+
+**Decisiones confirmadas con el usuario.** Cálculo exacto siempre que sea viable, con Monte Carlo como verificación cruzada. La información sobre otros jugadores es una condición genérica sobre su mano, no una lista cerrada de señas; las señas de cada zona se definirán encima. Los tantos esperados se calculan solo en paso (los envites son de la Fase 6). Se aceptan condiciones también sobre los rivales, en la API. La monotonía en la posición solo se exige a la equity **individual**.
+
+**Equity exacta por programación dinámica sobre el mazo restante.** Fijada la mano del héroe, las otras tres se reparten de 36 cartas. Enumerar las 330³ ternas por mano sería caro, pero el peso de la última mano solo depende del mazo que queda tras quitar las dos anteriores, y hay pocos mazos distintos (≤ 6 435; 5 288 para R R C 5). Se precalcula `W3[mano, mazo]` y el resto son productos vectorizados. Los pesos son enteros: la suma total es exactamente C(36,4)·C(32,4)·C(28,4) ≈ 4,3·10¹³ < 2⁵³, así que en float64 las sumas son exactas, no aproximadas.
+
+**El compañero se enumera primero.** El reparto es intercambiable, así que el orden de enumeración es libre. Con el compañero primero, "gana la pareja" se convierte en un producto de condiciones independientes sobre cada rival ("por debajo del mejor de nosotros dos, con el desempate por asiento"). Además, una condición sobre el compañero se aplica en ese mismo nivel.
+
+**Umbrales con sumas acumuladas.** Las condiciones del tipo "fuerza del rival < umbral" se resuelven ordenando las manos por fuerza y precalculando sumas acumuladas. Así se evita recorrer los ~330 umbrales posibles.
+
+**Tantos netos con una identidad.** Lo que cobran los rivales cuando ganan es E[jugadas rivales] − E[jugadas rivales · ganamos nosotros]. Esto funciona porque, si nadie tiene la jugada, sus tantos valen 0. Así todo se reduce a sumas con la misma estructura de producto.
+
+**Rendimiento: limitado por la memoria, no por la CPU.** Se pasó de ~1 s a ~0,27 s por mano (4 posiciones × 5 lances), guardando W3 traspuesta para que la suma acumulada recorra filas contiguas. La tabla completa tarda 83 s con 1 proceso, 43 s con 4 y 45 s con 8: más procesos no ayudan porque se satura el ancho de banda de memoria. Por defecto se usan hasta 4. Una consulta suelta con condiciones tarda ~0,3 s. El usuario pidió no optimizar más.
+
+**Caché en disco.** La tabla se guarda en `resultados/cache/equity_<hash>.npz`. El nombre incluye un hash de las reglas y de `VERSION_MOTOR`, de modo que cambiar una regla o el motor obliga a recalcular. Una vez generada, se carga en 0,1 s. Hubo una generación que tardó 6 078 s; repetida en condiciones controladas tardó 46 s y dio un resultado idéntico bit a bit. La causa más probable es que el equipo se suspendiera durante un corte de conexión, ya que `perf_counter` cuenta también el tiempo suspendido.
+
+**Tres verificaciones independientes:**
+1. **Fuerza bruta** (`tests/fuerza_bruta.py`): recorre todas las ternas en orden de asiento, en lugar de compañero primero, y decide los ganadores con `ganadores_lance`/`tantos_lance`, ya contrastadas con la resolución escalar. Coincide con el exacto a 1e-9.
+2. **Monte Carlo** con muestreo por rechazo para las condiciones.
+3. **Identidades exactas** sobre la tabla completa:
+   - Σ posiciones P(gana) = P(se juega).
+   - P(pareja 1) + P(pareja 2) = P(se juega).
+   - Los tantos son de suma cero.
+   - P(se juega juego) + P(se juega punto) = 1.
+   - Monotonía individual en la posición.
+
+**Corrección de Bonferroni en los tests de Monte Carlo.** Un test con ~63 comparaciones al 99,9 % tiene un ~6 % de probabilidad de fallar por azar, y le ocurrió a una con 3,5σ. La fuerza bruta confirmó que el exacto era correcto. Cambiar la semilla hasta que pasara habría sido trampa, así que se repartió el 0,1 % de error entre las 63 comparaciones (z ≈ 4,2 por comparación). En el uso normal de la CLI se mantiene el 95 %: allí que salga algún "FUERA" de vez en cuando es lo esperado.
+
+**Tests lentos separados.** Se marcan con `@pytest.mark.slow`: fuerza bruta, Monte Carlo grandes y tabla completa. `pytest` ejecuta por defecto solo los rápidos (~10 s); los lentos se lanzan con `pytest -m slow`.
+
+**La equity por pareja no es monótona en la posición.** Con una mano floja, a la pareja le va mejor si el compañero es mano, porque es él quien gana los empates. En grande pasa en 264 de las 330 manos: P(pareja) es mayor con el héroe en posición 3 que en posición 1. Hay un test que lo documenta con A A A A.
+
+**Limitación conocida.** Todo supone manos del **reparto inicial** uniformes. En la mesa real los lances se juegan después del mus y los descartes, y cortar o no ya informa. Esto se corrige con la Fase 3.

@@ -118,6 +118,14 @@ class TestCLI:
         assert main(["equity", "R R C 5", "--companero", "pares>=trio"]) == 1
         assert "Categoría de pares" in capsys.readouterr().err
 
+    def test_ranking_respeta_top_y_cola(self, capsys, monkeypatch, tabla_equity_pequena):
+        import mus.__main__ as cli
+        monkeypatch.setattr(cli, "cargar_tabla_equity", lambda reglas: tabla_equity_pequena)
+        for cola, filas_esperadas in ((0, 5), (3, 8)):
+            assert main(["ranking", "--lance", "grande", "--top", "5", "--cola", str(cola)]) == 0
+            lineas = [l for l in capsys.readouterr().out.splitlines() if l.strip()[:1].isdigit()]
+            assert len(lineas) == filas_esperadas
+
     def test_ayuda_menciona_las_comillas(self, capsys):
         with pytest.raises(SystemExit):
             main(["equity", "--help"])

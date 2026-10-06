@@ -25,5 +25,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tests"]
-addopts = "-ra"
-markers = ["lento: verificaciones costosas (fuerza bruta, tabla completa); saltar con -m \"not lento\""]
+# Por defecto solo los tests rápidos; los lentos se lanzan aparte con `pytest -m slow`
+# (un -m en la línea de órdenes sustituye al de addopts).
+addopts = "-ra -m \"not slow\""
+markers = ["slow: verificaciones costosas (fuerza bruta, Monte Carlo grandes, tabla de equity completa)"]

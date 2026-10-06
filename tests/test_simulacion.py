@@ -76,6 +76,7 @@ class TestReparto:
         assert (conteos.sum(axis=1) == 16).all()
         assert (conteos <= np.array(tabla.baraja.copias)).all()
 
+    @pytest.mark.slow
     def test_repartos_agotan_rangos_a_veces(self, tabla):
         """Sanidad: alguna mesa debe tener los 8 reyes (si no, sobraría una copia)."""
         indices = repartir(200_000, tabla, generador(SEMILLA))
@@ -83,6 +84,7 @@ class TestReparto:
         assert tabla.conteos[indices, rey].sum(axis=1).max() == 8
 
 
+@pytest.mark.slow
 class TestExactoVsMonteCarlo:
     def test_metricas_de_una_mano(self, tabla):
         filas = comparar_exacto_mc(tabla, 400_000, SEMILLA, CONFIANZA_TEST)

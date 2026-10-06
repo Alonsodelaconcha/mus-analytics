@@ -27,6 +27,7 @@ def manos_fisicas(tabla):
         yield tuple(cartas[c] for c in combo)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("reglas", REGLAS[:2], ids=["8reyes", "4reyes"])
 def test_combinaciones_coinciden_con_fuerza_bruta(reglas):
     tabla = construir_tabla(reglas)
@@ -36,6 +37,7 @@ def test_combinaciones_coinciden_con_fuerza_bruta(reglas):
     np.testing.assert_array_equal(tabla.combinaciones, esperado)
 
 
+@pytest.mark.slow
 def test_probabilidades_por_fuerza_bruta_independiente():
     """P(pares), P(juego) y P(rey) contando cartas, sin usar los evaluadores."""
     tabla = construir_tabla()
@@ -53,6 +55,7 @@ def test_probabilidades_por_fuerza_bruta_independiente():
     assert con_rey / total == pytest.approx(p[tabla.conteos[:, rey] > 0].sum(), abs=1e-12)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("reglas", REGLAS, ids=["8reyes", "4reyes", "31real"])
 @pytest.mark.parametrize("lance", list(Lance))
 def test_fuerza_conserva_el_orden_de_las_claves(reglas, lance):

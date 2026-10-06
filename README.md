@@ -25,11 +25,32 @@ python -m mus --31-real distribucion
 
 Las cartas se escriben `A 4 5 6 7 S C R` (también `1`, `10`, `11`, `12`; en 8 reyes, `2` = As y `3` = Rey).
 
+### Equity (Fase 2)
+
+```bash
+python -m mus equity "R R C 5" --posicion 1
+python -m mus equity "R R C 5" --posicion 1 --companero "pares>=medias" --n 1000000
+python -m mus ranking --lance pares --posicion 4 --top 15
+python -m mus mesa
+python -m mus equity-tabla --csv resultados/equity.csv --json resultados/equity.json --rankings resultados/rankings.csv
+python -m mus grafica-posicion --salida resultados/posicion.png
+python -m mus grafica-condicion "R R C 5" --companero "sin_pares" --salida resultados/condicion.png
+```
+
+**Las condiciones van siempre entre comillas.** En PowerShell, y en cualquier shell, `>` y `<` sin comillas redirigen la salida a un fichero. Sintaxis: cláusulas separadas por comas, que se combinan con "y": `sin_pares`, `con_pares`, `sin_juego`, `con_juego`, `pares>=medias`, `pares=duples`, `juego=31`, `suma>=28`, `reyes>=2`, `ases<=1`…
+
+La tabla completa (330 manos × 4 posiciones) tarda ~45 s la primera vez y se guarda en `resultados/cache/`.
+
 ## Tests
 
 ```bash
 python -m pytest
 ```
+```bash
+python -m pytest -m slow
+```
+
+El primero ejecuta los tests rápidos (~10 s). El segundo, las verificaciones costosas: fuerza bruta, Monte Carlo grandes y tabla de equity completa (unos minutos).
 
 ## Estructura
 
@@ -38,5 +59,7 @@ python -m pytest
 - `src/mus/evaluacion.py`: claves de cada lance y resolución entre 4 jugadores.
 - `src/mus/tablas.py`: evaluaciones precalculadas de las 330 manos.
 - `src/mus/simulacion.py`: reparto Monte Carlo vectorizado e intervalos de Wilson.
-- `src/mus/analisis.py`: distribuciones exactas, verificación y exportación (CSV y gráficas).
+- `src/mus/condiciones.py`: condiciones sobre la mano de otro jugador (información del compañero o de los rivales).
+- `src/mus/equity.py`: equity exacta por mano, posición y lance (individual y pareja), tantos netos en paso y verificación Monte Carlo.
+- `src/mus/analisis.py`: distribuciones exactas, verificación, rankings y exportación (CSV, JSON y gráficas).
 - `docs/decisiones.md`: decisiones de diseño y sus motivos.

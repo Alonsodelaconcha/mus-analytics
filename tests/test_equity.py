@@ -7,8 +7,8 @@ Tres niveles de verificación independientes:
 3. Identidades exactas sobre la tabla completa (cada reparto tiene un único
    ganador, suma cero de tantos, monotonía individual en la posición).
 
-Los tests marcados ``lento`` tardan ~1 min en total; se pueden saltar con
-``pytest -m "not lento"``.
+Los tests marcados ``slow`` no se ejecutan por defecto; se lanzan con
+``pytest -m slow``.
 """
 
 from math import comb
@@ -61,7 +61,7 @@ def test_pesos_suman_los_repartos_fisicos():
 # --- 1. Fuerza bruta ---------------------------------------------------------
 
 
-@pytest.mark.lento
+@pytest.mark.slow
 @pytest.mark.parametrize("mano, posicion", [
     ("R R C 5", 1),   # pares y juego
     ("S 7 6 4", 2),   # sin pares ni juego: entra el punto
@@ -75,7 +75,7 @@ def test_coincide_con_fuerza_bruta(mano, posicion):
                                    err_msg=lance.value)
 
 
-@pytest.mark.lento
+@pytest.mark.slow
 def test_coincide_con_fuerza_bruta_con_condiciones():
     """Condición sobre el compañero y sobre un rival a la vez."""
     companero, rival = sin_juego(), con_pares()
@@ -91,6 +91,7 @@ def test_coincide_con_fuerza_bruta_con_condiciones():
 # --- 2. Monte Carlo ----------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("mano, posicion, companero, rivales", [
     ("R R C 5", 2, None, None),
     ("A A 4 5", 3, "sin_juego", None),
@@ -118,7 +119,7 @@ def tabla_equity():
     return calcular_tabla_equity()
 
 
-@pytest.mark.lento
+@pytest.mark.slow
 class TestIdentidades:
     def test_cada_reparto_tiene_un_unico_ganador(self, tabla_equity):
         """Σ_p Σ_H P(H)·P(gana | H, p) = P(el lance se juega)."""

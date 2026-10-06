@@ -189,9 +189,11 @@ def cmd_ranking(args: argparse.Namespace) -> None:
     print(f"Ranking de {lance.value} en posición {args.posicion} "
           f"({NOMBRE_POSICION[args.posicion]}), por P(gano yo):")
     print(f"  {'#':>4}  {'mano':<10}{'gano yo':>10}{'pareja':>10}{'tantos':>10}{'percentil':>11}")
-    seleccion = filas[:args.top] + ([] if args.top >= len(filas) else filas[-args.cola:])
+    # Ojo: filas[-0:] sería la lista entera, por eso la cola se calcula con un índice positivo.
+    cola = filas[max(args.top, len(filas) - args.cola):] if args.cola > 0 else []
+    seleccion = filas[:args.top] + cola
     for i, r in enumerate(seleccion):
-        if i == args.top and args.cola:
+        if i == args.top:
             print("  ...")
         print(f"  {r.puesto:>4}  {r.mano:<10}{r.equity.p_gana_individual:>10.4f}"
               f"{r.equity.p_gana_pareja:>10.4f}{r.equity.tantos_netos:>+10.3f}"

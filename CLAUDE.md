@@ -70,4 +70,5 @@ Variante alternativa a soportar: 4 reyes / 4 ases.
 - Entorno: Python 3.14 en `.venv` (`pip install -e ".[dev]"`). Las salidas generadas van a `resultados/` (ignorado por git).
 - Reglas confirmadas y diseño: ver `docs/decisiones.md`.
 - Para resolver lances de forma vectorizada usar `simulacion.ganadores_lance` (aplica el filtro del punto; repartos siempre en orden de juego, columna 0 = mano).
-- **Fase 2 – plan propuesto, pendiente de confirmación.**
+- **Fase 2 – terminada, pendiente del visto bueno del usuario.** Módulos `condiciones` (predicados genéricos sobre una mano, sintaxis de texto) y `equity` (exacta por programación dinámica sobre el mazo restante, verificación Monte Carlo, tabla completa con caché en `resultados/cache/`). CLI: `equity`, `equity-tabla`, `ranking`, `mesa`, `grafica-posicion`, `grafica-condicion`.
+- Tests: `pytest` ejecuta solo los rápidos (~10 s); `pytest -m slow` lanza los lentos (fuerza bruta, Monte Carlo grandes, tabla completa). Cambiar el cálculo de equity exige subir `equity.VERSION_MOTOR` para invalidar la caché.
