@@ -115,15 +115,23 @@ Cada entrada recoge qué se decidió y por qué. Las más recientes van al final
 - Errores de 0,3-0,6 tantos totales por mano.
 - Solo 8 de 84 magnitudes de mesa dentro del IC.
 
-El motivo es estructural. Tras el mus, el juego de los cuatro está *positivamente* correlacionado: todos tiran cartas bajas, que salen del juego, y las manos que quedan se reparten un fondo más rico en figuras. En cambio, un reparto de un único mazo de 40 cartas con 16 figuras lo correlaciona *negativamente*. La prueba está en P(nadie tiene juego):
+El motivo: **el modelo no reproduce las marginales.** Comprobado el 2026-10-07 con la política de la 3a, comparando la simulación de 1 millón de rondas con el modelo (héroe en el asiento 1):
 
-| Fuente | P(nadie tiene juego) |
-|---|---|
-| Simulación de la ronda | 0,0078 |
-| Manos independientes con las marginales reales | 0,028 |
-| Modelo reponderado | 0,031 |
+| Medida | Simulación real | Modelo reponderado |
+|---|---|---|
+| P(juego) de cada uno de los otros asientos | 60,4 % | **48,0 %** |
+| P(compañero con juego), si yo tengo / no tengo juego | 0,559 / 0,671 | 0,442 / 0,538 |
+| Correlación de "tener juego" entre dos asientos | −0,11 | también negativa |
+| P(nadie tiene juego) | 0,0049 | 0,0258 |
+| Producto de las marginales reales (como si fueran independientes) | 0,0246 | — |
 
-Ajustar los pesos para cuadrar las marginales no arreglaría el signo de la correlación. Los pesos por asiento se mantienen en `equity`: los necesitará la 3c para condicionar a "este jugador ha dado mus" con políticas mixtas.
+- **La correlación real es negativa.** Las figuras son limitadas: si yo tengo juego, mi compañero lo tiene con menos frecuencia. Por eso P(nadie tiene juego) real queda muy por debajo del producto de marginales.
+- **El fallo del modelo es de marginales, no de signo.** Bajo el reparto reponderado, la marginal de un asiento es ∝ p0(X)·r(X)·E[Π r_otros | X]. Ese último factor penaliza las manos ricas en figuras, porque dejan menos figuras a los demás asientos, cuyos pesos también las favorecen. Los cuatro pesos compiten por las mismas 16 figuras, y la marginal efectiva queda muy por debajo de q (48 % de juego frente a 60 %). En la mesa real esa competencia es menor porque las cartas bajas tiradas salen del juego y se reponen del mazo: las 16 cartas finales llevan 9,8 figuras de media, frente a 6,4 en el reparto inicial. Con menos juego para los rivales, el modelo sobrevaloraba el juego propio y el punto.
+- Ajustar los pesos para cuadrar las marginales (ajuste proporcional iterativo) podría reducir el error, pero no garantiza que la estructura condicional sea la real, y la simulación ya es precisa y rápida.
+
+*Corrección:* una versión anterior de esta nota atribuía el fallo a una correlación positiva del juego tras el mus. El usuario señaló que eso no casaba con los números, y los datos lo confirman: la correlación es negativa. Las cifras que se citaban entonces (0,0078 / 0,028 / 0,031) venían de otra política y se han sustituido por las de la tabla.
+
+Los pesos por asiento se mantienen en `equity`: los necesitará la 3c para condicionar a "este jugador ha dado mus" con políticas mixtas.
 
 **Equity tras el mus por simulación de la ronda completa.** La tabla de equity tras el mus se estima simulando rondas completas (4 millones por vuelta) y agrupando por la mano final de cada asiento, con su error típico. Las manos finales que no salen nunca (probabilidad despreciable) toman el valor de la Fase 2 como respaldo. Verificación contra una simulación independiente (otra semilla, 2 millones de rondas):
 - 84/84 magnitudes de mesa dentro del IC al 99,9 %.
@@ -157,5 +165,7 @@ Resultado: converge en 3 vueltas, con una explotabilidad media de 0,00004. Las t
 - En la 3a, dar mus mejoraba +0,73.
 - Con los rivales también descartándose, dar mus *empeora* −0,34 [−0,35, −0,32]: cortar es mejor.
 - Siendo postre empeora −1,09.
+
+**Limitación conocida (anotada a petición del usuario): coordinación de pareja.** El modelo decide cortar o dar mus mano a mano, sin comunicación con el compañero. Un jugador real puede dar mus con una mano dudosa para que hable el compañero, o preguntarle con señas antes de decidir. Es una mejora futura. En la 3c se aproxima solo en el caso testigo de A A 4 5 de postre, condicionando a dos tipos de mano del compañero.
 
 En general, cuando los rivales también mejoran, el mus vale bastante menos. Solo las manos realmente malas (R C 5 4, R 7 6 4) siguen ganando claramente con él, y al postre le favorece menos que a la mano.

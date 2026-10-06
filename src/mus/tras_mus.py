@@ -19,12 +19,13 @@ Piezas:
 
    Se probó antes una alternativa con el motor exacto: reponderar el reparto
    uniforme con pesos q_s/p0 por asiento. La verificación contra la simulación
-   la descartó (errores de 0,3-0,6 tantos totales). El motivo: tras el mus el
-   juego de los cuatro está *positivamente* correlacionado (todos tiran cartas
-   bajas, que salen del juego), mientras que un reparto de un único mazo de
-   40 cartas lo correlaciona *negativamente*. P(nadie tiene juego) simulada es
-   0,0078; la reponderada, 0,031 (por encima incluso de la de manos
-   independientes, 0,028).
+   la descartó (errores de 0,3-0,6 tantos totales). El motivo: no reproduce
+   las marginales. En un reparto de un único mazo, los pesos de los cuatro
+   asientos compiten por las mismas 16 figuras y cada asiento queda con un
+   48 % de juego en lugar del 60 % real; en la mesa real las cartas bajas
+   tiradas salen del juego y se reponen del mazo (las 16 cartas finales
+   llevan 9,8 figuras de media frente a 6,4 en el reparto). Ver
+   docs/decisiones.md.
 
 3. **Valoración de las opciones de una mano concreta** simulando la ronda con
    esa mano fija: incluye el efecto de mis propios descartes y la conjunta
