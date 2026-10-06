@@ -83,6 +83,22 @@ class TablaManos:
     def tiene_juego(self) -> np.ndarray:
         return self.suma >= 31
 
+    def valor_jugada(self, lance: Lance) -> np.ndarray | None:
+        """Tantos de la jugada de cada mano en pares o juego; ``None`` en el resto.
+
+        En pares y juego la pareja ganadora cobra la suma de las jugadas de
+        ambos; en grande, chica y punto cobra unos tantos fijos.
+        """
+        return {Lance.PARES: self.puntos_pares, Lance.JUEGO: self.puntos_juego}.get(lance)
+
+    def tantos_fijos(self, lance: Lance) -> int:
+        """Tantos fijos de grande, chica o punto."""
+        p = self.reglas.puntuacion
+        fijos = {Lance.GRANDE: p.grande, Lance.CHICA: p.chica, Lance.PUNTO: p.punto}
+        if lance not in fijos:
+            raise ValueError(f"{lance.value} no tiene tantos fijos: usa valor_jugada")
+        return fijos[lance]
+
     def indice(self, mano: Mano) -> int:
         """Índice de una mano en la tabla."""
         return int(self.indices_de_codigos(np.array([mano.codigo]))[0])

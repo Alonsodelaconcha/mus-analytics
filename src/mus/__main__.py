@@ -9,6 +9,18 @@ Ejemplos::
     python -m mus tabla --csv resultados/manos.csv
     python -m mus grafica --salida resultados/distribucion.png
     python -m mus --variante 4reyes distribucion
+
+    python -m mus equity "R R C 5" --posicion 1
+    python -m mus equity "R R C 5" --posicion 1 --companero "pares>=medias" --n 1000000
+    python -m mus equity "A A 4 5"                       # las cuatro posiciones
+    python -m mus ranking --lance grande --posicion 4 --top 15
+    python -m mus mesa
+    python -m mus equity-tabla --csv resultados/equity.csv --json resultados/equity.json
+    python -m mus grafica-posicion --salida resultados/posicion.png
+    python -m mus grafica-condicion "R R C 5" --companero "sin_pares" --salida resultados/c.png
+
+Las condiciones van SIEMPRE entre comillas: en PowerShell (y en cualquier
+shell) los caracteres > y < redirigen la salida a un fichero.
 """
 
 from __future__ import annotations
@@ -24,13 +36,24 @@ from mus.analisis import (
     distribucion_exacta,
     distribucion_sumas,
     exportar_comparacion_csv,
+    exportar_equity_csv,
+    exportar_equity_json,
+    exportar_rankings_csv,
     exportar_tabla_csv,
+    graficar_condicion,
     graficar_distribucion,
+    graficar_posicion,
+    probabilidades_mesa,
+    ranking,
 )
 from mus.cartas import parsear_mano
+from mus.condiciones import AYUDA_SINTAXIS, parsear_condicion
+from mus.equity import POSICIONES, EquityMano, cargar_tabla_equity, equity, simular_equity
 from mus.evaluacion import Lance, jugada_pares, puntos_juego, resolver_mano, suma
 from mus.reglas import ReglasMus, Variante
 from mus.tablas import construir_tabla
+
+NOMBRE_POSICION = {1: "mano", 2: "segundo", 3: "tercero", 4: "postre"}
 
 
 def _reglas(args: argparse.Namespace) -> ReglasMus:
@@ -111,8 +134,93 @@ def cmd_grafica(args: argparse.Namespace) -> None:
     print(f"Guardado en {graficar_distribucion(construir_tabla(_reglas(args)), args.salida)}")
 
 
+def _imprimir_equity(e: EquityMano) -> None:
+    print(f"\n{e.texto_mano} en posición {e.posicion} ({NOMBRE_POSICION[e.posicion]}); "
+          f"información: {e.descripcion_condiciones}"
+          + (f"  [P(se cumple) = {e.p_condiciones:.4f}]" if e.p_condiciones < 1 else ""))
+    print(f"  {'lance':<8}{'se juega':>10}{'gano yo':>10}{'pareja':>10}{'rivales':>10}"
+          f"{'tantos':>10}")
+    for l, x in e.por_lance.items():
+        print(f"  {l.value:<8}{x.p_se_juega:>10.4f}{x.p_gana_individual:>10.4f}"
+              f"{x.p_gana_pareja:>10.4f}{x.p_gana_rival:>10.4f}{x.tantos_netos:>+10.3f}")
+    print(f"  {'total':<48}{e.tantos_netos:>+10.3f}")
+
+
+def cmd_equity(args: argparse.Namespace) -> None:
+    reglas = _reglas(args)
+    companero = parsear_condicion(args.companero, reglas) if args.companero else None
+    posiciones = [args.posicion] if args.posicion else list(POSICIONES)
+    print("Probabilidades exactas sobre el reparto inicial (sin mus ni descartes); "
+          "tantos netos en paso, a favor - en contra.")
+    for p in posiciones:
+        e = equity(args.mano, p, reglas, companero=companero)
+        _imprimir_equity(e)
+        if args.n:
+            mc = simular_equity(args.mano, p, args.n, reglas, companero=companero,
+                                semilla=args.semilla)
+            print(f"  Monte Carlo: {mc.n_aceptados} repartos válidos de {mc.n_simulados}, "
+                  "IC 95 %")
+            for l, m in mc.por_lance.items():
+                x = e.por_lance[l]
+                dentro = (m.p_gana_individual.contiene(x.p_gana_individual)
+                          and m.p_gana_pareja.contiene(x.p_gana_pareja)
+                          and m.tantos_netos.contiene(x.tantos_netos))
+                print(f"  {l.value:<8}yo {m.p_gana_individual}  pareja {m.p_gana_pareja}  "
+                      f"tantos {m.tantos_netos}  {'ok' if dentro else 'FUERA'}")
+
+
+def cmd_equity_tabla(args: argparse.Namespace) -> None:
+    inicio = time.perf_counter()
+    te = cargar_tabla_equity(_reglas(args))
+    print(f"Tabla de equity lista en {time.perf_counter() - inicio:.1f} s "
+          "(se guarda en resultados/cache; la primera vez tarda ~1 min)")
+    if args.csv:
+        print(f"Guardado en {exportar_equity_csv(te, args.csv)}")
+    if args.json:
+        print(f"Guardado en {exportar_equity_json(te, args.json)}")
+    if args.rankings:
+        print(f"Guardado en {exportar_rankings_csv(te, args.rankings)}")
+
+
+def cmd_ranking(args: argparse.Namespace) -> None:
+    te = cargar_tabla_equity(_reglas(args))
+    lance = Lance(args.lance)
+    filas = ranking(te, lance, args.posicion)
+    print(f"Ranking de {lance.value} en posición {args.posicion} "
+          f"({NOMBRE_POSICION[args.posicion]}), por P(gano yo):")
+    print(f"  {'#':>4}  {'mano':<10}{'gano yo':>10}{'pareja':>10}{'tantos':>10}{'percentil':>11}")
+    seleccion = filas[:args.top] + ([] if args.top >= len(filas) else filas[-args.cola:])
+    for i, r in enumerate(seleccion):
+        if i == args.top and args.cola:
+            print("  ...")
+        print(f"  {r.puesto:>4}  {r.mano:<10}{r.equity.p_gana_individual:>10.4f}"
+              f"{r.equity.p_gana_pareja:>10.4f}{r.equity.tantos_netos:>+10.3f}"
+              f"{r.percentil:>11.3f}")
+
+
+def cmd_mesa(args: argparse.Namespace) -> None:
+    for nombre, p in probabilidades_mesa(cargar_tabla_equity(_reglas(args))).items():
+        print(f"  {nombre:<38}{p:>10.5f}")
+
+
+def cmd_grafica_posicion(args: argparse.Namespace) -> None:
+    print(f"Guardado en {graficar_posicion(cargar_tabla_equity(_reglas(args)), args.salida)}")
+
+
+def cmd_grafica_condicion(args: argparse.Namespace) -> None:
+    reglas = _reglas(args)
+    sin = equity(args.mano, args.posicion, reglas)
+    con = equity(args.mano, args.posicion, reglas,
+                 companero=parsear_condicion(args.companero, reglas))
+    print(f"Guardado en {graficar_condicion(sin, con, args.salida)}")
+
+
 def crear_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mus", description="Motor de estadísticas del mus.")
+    parser = argparse.ArgumentParser(
+        prog="mus", description="Motor de estadísticas del mus.",
+        epilog="Las condiciones (--companero) van SIEMPRE entre comillas, p. ej. "
+               "--companero \"pares>=medias\": sin ellas, > y < redirigen la salida "
+               "en PowerShell y en cualquier shell.")
     parser.add_argument("--variante", choices=[v.value for v in Variante],
                         default=Variante.OCHO_REYES.value, help="Baraja (por defecto 8reyes).")
     parser.add_argument("--31-real", dest="treinta_y_una_real", action="store_true",
@@ -144,6 +252,49 @@ def crear_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("grafica", help="Gráfica de la distribución exacta.")
     p.add_argument("--salida", required=True, help="Ruta de la imagen (p. ej. .png).")
     p.set_defaults(func=cmd_grafica)
+
+    ayuda_companero = ("Condición sobre la mano del compañero, ENTRE COMILLAS. "
+                       + AYUDA_SINTAXIS)
+    p = sub.add_parser("equity", help="Equity exacta de una mano por lance y posición.",
+                       epilog=AYUDA_SINTAXIS)
+    p.add_argument("mano", help='Mano, p. ej. "R R C 5".')
+    p.add_argument("--posicion", type=int, choices=POSICIONES,
+                   help="1 = mano ... 4 = postre (por defecto, las cuatro).")
+    p.add_argument("--companero", help=ayuda_companero)
+    p.add_argument("--n", type=int, default=0,
+                   help="Repartos Monte Carlo para verificar (0 = solo exacto).")
+    p.add_argument("--semilla", type=int, default=None, help="Semilla del Monte Carlo.")
+    p.set_defaults(func=cmd_equity)
+
+    p = sub.add_parser("equity-tabla",
+                       help="Equity de todas las manos y posiciones (CSV, JSON, rankings).")
+    p.add_argument("--csv", help="CSV largo: mano, posición, lance, métricas.")
+    p.add_argument("--json", help="JSON compacto para la web.")
+    p.add_argument("--rankings", help="CSV con todos los rankings.")
+    p.set_defaults(func=cmd_equity_tabla)
+
+    p = sub.add_parser("ranking", help="Ranking de manos por equity en un lance y posición.")
+    p.add_argument("--lance", required=True, choices=[l.value for l in Lance])
+    p.add_argument("--posicion", type=int, choices=POSICIONES, default=1)
+    p.add_argument("--top", type=int, default=20, help="Mejores manos a mostrar.")
+    p.add_argument("--cola", type=int, default=5, help="Peores manos a mostrar.")
+    p.set_defaults(func=cmd_ranking)
+
+    p = sub.add_parser("mesa", help="Probabilidades exactas de mesa por lance y posición.")
+    p.set_defaults(func=cmd_mesa)
+
+    p = sub.add_parser("grafica-posicion", help="Equity siendo mano frente a postre.")
+    p.add_argument("--salida", required=True)
+    p.set_defaults(func=cmd_grafica_posicion)
+
+    p = sub.add_parser("grafica-condicion",
+                       help="Efecto de una condición del compañero sobre una mano.",
+                       epilog=AYUDA_SINTAXIS)
+    p.add_argument("mano")
+    p.add_argument("--posicion", type=int, choices=POSICIONES, default=1)
+    p.add_argument("--companero", required=True, help=ayuda_companero)
+    p.add_argument("--salida", required=True)
+    p.set_defaults(func=cmd_grafica_condicion)
     return parser
 
 

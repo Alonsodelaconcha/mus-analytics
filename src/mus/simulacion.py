@@ -80,11 +80,51 @@ def _lotes(n: int, tamano: int) -> Iterator[int]:
         n -= m
 
 
+@dataclass(frozen=True)
+class EstimacionMedia:
+    """Media estimada por Monte Carlo con intervalo normal (TCL).
+
+    Para medias de variables acotadas como los tantos de un lance, con n
+    grande el intervalo normal es adecuado.
+    """
+
+    media: float
+    desviacion: float
+    n: int
+    confianza: float = 0.95
+
+    @classmethod
+    def de_muestra(cls, valores: np.ndarray, confianza: float = 0.95) -> EstimacionMedia:
+        if len(valores) < 2:
+            raise ValueError("Se necesitan al menos 2 valores")
+        return cls(float(valores.mean()), float(valores.std(ddof=1)), len(valores), confianza)
+
+    @property
+    def intervalo(self) -> tuple[float, float]:
+        z = NormalDist().inv_cdf(0.5 + self.confianza / 2)
+        radio = z * self.desviacion / sqrt(self.n)
+        return self.media - radio, self.media + radio
+
+    def contiene(self, valor: float) -> bool:
+        bajo, alto = self.intervalo
+        return bajo <= valor <= alto
+
+    def __str__(self) -> str:
+        bajo, alto = self.intervalo
+        return f"{self.media:+.4f} [{bajo:+.4f}, {alto:+.4f}]"
+
+
 def _extraer(
-    n: int, n_manos: int, tabla: TablaManos, rng: np.random.Generator, tamano_lote: int
+    n: int, n_manos: int, tabla: TablaManos, rng: np.random.Generator, tamano_lote: int,
+    mazo: np.ndarray | None = None,
 ) -> np.ndarray:
-    """``n`` repartos de ``n_manos`` manos sin reemplazo: array (n, n_manos) de índices."""
-    mazo = np.array(tabla.baraja.cartas(), dtype=np.int8)
+    """``n`` repartos de ``n_manos`` manos sin reemplazo: array (n, n_manos) de índices.
+
+    ``mazo`` permite repartir de un mazo incompleto (rangos de las cartas que
+    quedan); por defecto, la baraja entera.
+    """
+    if mazo is None:
+        mazo = np.array(tabla.baraja.cartas(), dtype=np.int8)
     potencias = potencias_codigo(tabla.baraja)
     cartas_usadas = n_manos * CARTAS_POR_MANO
     resultado = np.empty((n, n_manos), dtype=np.int16)
@@ -109,6 +149,23 @@ def repartir(
 ) -> np.ndarray:
     """``n`` repartos completos: array (n, 4) de índices, columna 0 = mano."""
     return _extraer(n, JUGADORES, tabla, rng, tamano_lote)
+
+
+def repartir_con_mano(
+    n: int, tabla: TablaManos, rng: np.random.Generator, indice_mano: int, posicion: int,
+    tamano_lote: int = TAMANO_LOTE,
+) -> np.ndarray:
+    """``n`` repartos con la mano ``indice_mano`` fija en ``posicion`` (1-4).
+
+    Las otras tres manos salen de las 36 cartas restantes. Devuelve un array
+    (n, 4) en orden de juego, como :func:`repartir`.
+    """
+    if not 1 <= posicion <= JUGADORES:
+        raise ValueError("La posición debe estar entre 1 y 4")
+    restantes = np.array(tabla.baraja.copias) - tabla.conteos[indice_mano]
+    mazo = np.repeat(np.arange(tabla.baraja.n_rangos), restantes).astype(np.int8)
+    otras = _extraer(n, JUGADORES - 1, tabla, rng, tamano_lote, mazo)
+    return np.insert(otras, posicion - 1, indice_mano, axis=1)
 
 
 def ganadores(fuerzas: np.ndarray) -> np.ndarray:
@@ -139,3 +196,21 @@ def ganadores_lance(tabla: TablaManos, repartos: np.ndarray, lance: Lance) -> np
     if lance is Lance.PUNTO:
         ganador[tabla.tiene_juego[repartos].any(axis=1)] = 0
     return ganador
+
+
+def tantos_lance(
+    tabla: TablaManos, repartos: np.ndarray, lance: Lance, ganador: np.ndarray
+) -> np.ndarray:
+    """Tantos que cobra en paso la pareja ganadora de cada reparto (0 si nadie gana).
+
+    En pares y juego son las jugadas de los dos compañeros de la pareja
+    ganadora; en el resto, los tantos fijos del lance.
+    """
+    valor = tabla.valor_jugada(lance)
+    if valor is None:
+        tantos = np.full(len(repartos), tabla.tantos_fijos(lance), dtype=np.int64)
+    else:
+        v = valor[repartos].astype(np.int64)
+        pareja1, pareja2 = v[:, 0] + v[:, 2], v[:, 1] + v[:, 3]
+        tantos = np.where(ganador % 2 == 1, pareja1, pareja2)
+    return np.where(ganador > 0, tantos, 0)

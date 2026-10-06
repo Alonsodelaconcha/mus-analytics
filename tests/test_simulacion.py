@@ -12,9 +12,12 @@ from mus.cartas import parsear_mano as pm
 from mus.evaluacion import Lance, resolver_lance
 from mus.simulacion import (
     Estimacion,
+    EstimacionMedia,
     generador,
     ganadores,
     ganadores_lance,
+    repartir_con_mano,
+    tantos_lance,
     intervalo_wilson,
     muestrear_manos,
     repartir,
@@ -110,6 +113,30 @@ class TestExactoVsMonteCarlo:
         assert chi2 < critico
 
 
+class TestRepartoConMano:
+    @pytest.mark.parametrize("posicion", [1, 2, 3, 4])
+    def test_mano_fija_en_su_columna(self, tabla, posicion):
+        h = tabla.indice(pm("R R R C"))
+        repartos = repartir_con_mano(20_000, tabla, generador(SEMILLA), h, posicion)
+        assert (repartos[:, posicion - 1] == h).all()
+        conteos = tabla.conteos[repartos].sum(axis=1)
+        assert (conteos <= np.array(tabla.baraja.copias)).all()
+        # con R R R C fuera, como mucho quedan 5 reyes para los otros tres
+        otros = np.delete(repartos, posicion - 1, axis=1)
+        assert tabla.conteos[otros, tabla.baraja.indice("R")].sum(axis=1).max() == 5
+
+    def test_posicion_invalida(self, tabla):
+        with pytest.raises(ValueError):
+            repartir_con_mano(10, tabla, generador(1), 0, 5)
+
+
+def test_estimacion_media():
+    e = EstimacionMedia.de_muestra(np.array([1.0, -1.0] * 5000))
+    assert e.media == 0 and e.contiene(0) and not e.contiene(0.1)
+    bajo, alto = e.intervalo
+    assert alto - bajo == pytest.approx(2 * 1.959964 * 1.0 / 100, rel=1e-3)
+
+
 class TestGanadoresVectorizados:
     def test_desempata_por_posicion(self):
         fuerzas = np.array([[3, 5, 5, 1], [2, 2, 2, 2], [0, 0, 1, 1], [0, 0, 0, 3]])
@@ -138,9 +165,11 @@ class TestGanadoresVectorizados:
         resolver_lance, con las columnas en orden de juego (0 = mano)."""
         repartos = repartir(2_000, tabla, generador(SEMILLA))
         vectorizado = ganadores_lance(tabla, repartos, lance)
-        for fila, g in zip(repartos, vectorizado):
+        tantos = tantos_lance(tabla, repartos, lance, vectorizado)
+        for fila, g, t in zip(repartos, vectorizado, tantos):
             r = resolver_lance([tabla.manos[i] for i in fila], lance)
             assert g == (r.ganador or 0)
+            assert t == r.tantos
         # sanidad: la muestra incluye repartos en los que el lance no se juega
         if lance is not Lance.GRANDE and lance is not Lance.CHICA:
             assert (vectorizado == 0).any()

@@ -24,4 +24,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = "-ra"
+markers = ["lento: verificaciones costosas (fuerza bruta, tabla completa); saltar con -m \"not lento\""]

@@ -1,16 +1,27 @@
 """Tests de las distribuciones exactas, la exportación y la CLI."""
 
 import csv
+import json
 
+import numpy as np
 import pytest
 
 from mus.__main__ import main
 from mus.analisis import (
     distribucion_exacta,
     distribucion_sumas,
+    exportar_equity_csv,
+    exportar_equity_json,
+    exportar_rankings_csv,
     exportar_tabla_csv,
+    graficar_condicion,
     graficar_distribucion,
+    graficar_posicion,
+    ranking,
 )
+from mus.condiciones import sin_pares
+from mus.equity import POSICIONES, TablaEquity, equity
+from mus.evaluacion import Lance
 from mus.reglas import ReglasMus, Variante
 from mus.tablas import construir_tabla
 
@@ -51,7 +62,67 @@ def test_grafica(tmp_path):
     assert ruta.stat().st_size > 0
 
 
+@pytest.fixture(scope="module")
+def tabla_equity_pequena():
+    """Tabla de equity con valores reales solo en tres manos (A A A A, una
+    intermedia y R R R R): las exportaciones no dependen de que estén todas."""
+    tabla = construir_tabla()
+    arrays = [np.zeros((tabla.n_manos, 4, 5)) for _ in range(4)]
+    for i in (0, tabla.n_manos // 2, tabla.n_manos - 1):
+        for p in POSICIONES:
+            for l, e in enumerate(equity(tabla.manos[i], p).por_lance.values()):
+                for a, v in zip(arrays, (e.p_se_juega, e.p_gana_individual,
+                                         e.p_gana_pareja, e.tantos_netos)):
+                    a[i, p - 1, l] = v
+    return TablaEquity(tabla, *arrays)
+
+
+class TestExportacionEquity:
+    def test_csv(self, tabla_equity_pequena, tmp_path):
+        ruta = exportar_equity_csv(tabla_equity_pequena, tmp_path / "e.csv")
+        with ruta.open(encoding="utf-8") as f:
+            filas = list(csv.DictReader(f))
+        assert len(filas) == 330 * 4 * 5
+        assert {f["lance"] for f in filas} == {l.value for l in Lance}
+
+    def test_json(self, tabla_equity_pequena, tmp_path):
+        datos = json.loads(exportar_equity_json(tabla_equity_pequena,
+                                                tmp_path / "e.json").read_text("utf-8"))
+        assert len(datos["manos"]) == 330
+        assert len(datos["equity"]["p_gana_pareja"]["grande"]) == 330
+        assert len(datos["equity"]["p_gana_pareja"]["grande"][0]) == 4
+
+    def test_ranking(self, tabla_equity_pequena, tmp_path):
+        filas = ranking(tabla_equity_pequena, Lance.GRANDE, 1)
+        assert [f.puesto for f in filas] == list(range(1, 331))
+        equities = [f.equity.p_gana_individual for f in filas]
+        assert equities == sorted(equities, reverse=True)
+        assert filas[0].mano == "R R R R"
+        assert exportar_rankings_csv(tabla_equity_pequena, tmp_path / "r.csv").exists()
+
+    def test_graficas(self, tabla_equity_pequena, tmp_path):
+        assert graficar_posicion(tabla_equity_pequena, tmp_path / "p.png").stat().st_size > 0
+        sin, con = equity("R R C 5", 1), equity("R R C 5", 1, companero=sin_pares())
+        assert graficar_condicion(sin, con, tmp_path / "c.png").stat().st_size > 0
+
+
 class TestCLI:
+    def test_equity(self, capsys):
+        assert main(["equity", "R R C 5", "--posicion", "1", "--companero", "pares>=medias",
+                     "--n", "20000", "--semilla", "1"]) == 0
+        salida = capsys.readouterr().out
+        assert "jugador 3: pares>=medias" in salida
+        assert "Monte Carlo" in salida
+
+    def test_equity_condicion_invalida(self, capsys):
+        assert main(["equity", "R R C 5", "--companero", "pares>=trio"]) == 1
+        assert "Categoría de pares" in capsys.readouterr().err
+
+    def test_ayuda_menciona_las_comillas(self, capsys):
+        with pytest.raises(SystemExit):
+            main(["equity", "--help"])
+        assert "comillas" in capsys.readouterr().out.lower()
+
     def test_evaluar(self, capsys):
         assert main(["evaluar", "R R C 5"]) == 0
         assert "448 combinaciones" in capsys.readouterr().out
