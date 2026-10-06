@@ -70,3 +70,33 @@ Cada entrada recoge qué se decidió y por qué. Las más recientes van al final
 **La equity por pareja no es monótona en la posición.** Con una mano floja, a la pareja le va mejor si el compañero es mano, porque es él quien gana los empates. En grande pasa en 264 de las 330 manos: P(pareja) es mayor con el héroe en posición 3 que en posición 1. Hay un test que lo documenta con A A A A.
 
 **Limitación conocida.** Todo supone manos del **reparto inicial** uniformes. En la mesa real los lances se juegan después del mus y los descartes, y cortar o no ya informa. Esto se corrige con la Fase 3.
+
+## 2026-10-06 · Fase 3: reglas del mus confirmadas con el usuario
+
+| Tema | Decisión |
+|---|---|
+| Descarte | Si hay mus, es obligatorio descartar al menos 1 carta (hasta 4). Quedarse servido equivale a cortar. |
+| Información pública | Es público cuántas cartas pide cada uno; las descartadas no se enseñan. No se modela "mus visto". |
+| Quién corta | Se habla en orden desde la mano y basta con que uno corte. No se modelan "mus corrido" ni otras variantes locales. |
+| Mazo agotado | Configurable. Por defecto se barajan los descartes de rondas anteriores, se reparte en orden desde la mano y no hay límite de rondas. (En la primera ronda no puede agotarse: se piden como mucho 16 cartas y quedan 24.) |
+| Objetivo de las políticas | Pesos por lance configurables, con los tantos en paso como valor por defecto. |
+| Iteración 3b/3c | Si oscila, se amortigua mezclando la política nueva con la anterior antes de darla por no convergente. |
+
+**Plan de la fase** (aprobado): 3a descarte de una mano aislada (exacto); 3b distribución de la mesa tras el mus (marginal exacta + equity con rivales reponderados, verificada con Monte Carlo de la ronda completa); 3c cortar o no, con el efecto de selección (solo llegan al descarte las manos con las que nadie corta) y recalculando la 3b.
+
+## 2026-10-06 · Fase 3a: descarte de una mano aislada
+
+**Opciones = sub-multiconjuntos distintos que se conservan.** Con rangos repetidos hay menos de 15 (R R C 5 tiene 11; R R R R, 4). En total hay 3 546 opciones para las 330 manos. Quedarse servido no es una opción si hay mus, porque equivale a cortar: solo se muestra como referencia.
+
+**Distribución exacta por hipergeométrica multivariante.** Robar n cartas del mazo equivale, desde el punto de vista del jugador, a robarlas de las 36 que no ve: P(D) = ∏ C(U_r, d_r) / C(36, n), con U = copias − mano original (las descartadas no vuelven). Se verifica de tres formas:
+- contra una enumeración de robos de cartas físicas, con fracciones exactas;
+- contra valores calculados a mano (R C 5 4 tirando el 4: P(juego) = 22/36);
+- contra Monte Carlo (χ²).
+
+**Objetivos.** `tantos` son los tantos netos en paso de la pareja, con pesos por lance configurables (`--pesos "grande=2,punto=0"`; los lances no citados pesan 1). Los objetivos de un solo lance (`grande`, `chica`, `pares`, `juego`) maximizan P(gano yo ese lance): miden la fuerza de *mi* mano sin depender de lo que lleve el compañero.
+
+**Valoración con la equity de la Fase 2.** Cada mano final se valora con la tabla del reparto inicial, en la que los rivales aún no se han descartado. Es la limitación principal de la 3a, y la que corrige la 3b. Por eso la "mejora" frente a la mano servida todavía no sirve para decidir si cortar: compara mi mano tras el mus con rivales que no se han descartado.
+
+**Simplificación: mis descartes no se descuentan de las manos rivales.** La tabla de equity supone que las cartas que he tirado podrían estar en manos de los rivales. El efecto se medirá en la 3b, cuando la equity se recalcule contra la mesa tras el mus.
+
+**Coste.** Las distribuciones de todas las manos y opciones se calculan en ~1 s usando una tabla de combinatorios indexada con NumPy (con listas de Python, la variante de 4 reyes tardaba 12 s). Valorar las opciones es un producto matriz-vector.

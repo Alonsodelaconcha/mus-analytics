@@ -41,6 +41,17 @@ python -m mus grafica-condicion "R R C 5" --companero "sin_pares" --salida resul
 
 La tabla completa (330 manos × 4 posiciones) tarda ~45 s la primera vez y se guarda en `resultados/cache/`.
 
+### Descarte (Fase 3a)
+
+```bash
+python -m mus descarte "R R C 5" --posicion 1
+python -m mus descarte "R R C 5" --posicion 1 --objetivo grande --n 200000
+python -m mus descarte "A A 4 5" --pesos "chica=2,punto=0"
+python -m mus descarte-tabla --objetivo tantos --csv resultados/descartes_tantos.csv
+```
+
+Objetivos: `tantos` (tantos netos en paso, por defecto), `grande`, `chica`, `pares` y `juego` (P de ganar yo ese lance). Con `--pesos` se ponderan los tantos de cada lance. La valoración usa la equity del reparto inicial: los rivales aún no se han descartado (eso llega con la Fase 3b).
+
 ## Tests
 
 ```bash
@@ -61,5 +72,6 @@ El primero ejecuta los tests rápidos (~10 s). El segundo, las verificaciones co
 - `src/mus/simulacion.py`: reparto Monte Carlo vectorizado e intervalos de Wilson.
 - `src/mus/condiciones.py`: condiciones sobre la mano de otro jugador (información del compañero o de los rivales).
 - `src/mus/equity.py`: equity exacta por mano, posición y lance (individual y pareja), tantos netos en paso y verificación Monte Carlo.
+- `src/mus/descarte.py`: formas de descartarse, distribución exacta de la mano resultante y descarte recomendado según el objetivo.
 - `src/mus/analisis.py`: distribuciones exactas, verificación, rankings y exportación (CSV, JSON y gráficas).
 - `docs/decisiones.md`: decisiones de diseño y sus motivos.

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
+from mus.cartas import Baraja
+from mus.descarte import MejorDescarte, Objetivo, texto_conteos
 from mus.equity import POSICIONES, EquityLance, EquityMano, TablaEquity
 from mus.evaluacion import Lance, Pares
 from mus.simulacion import Estimacion, generador, muestrear_manos
@@ -255,6 +257,23 @@ def probabilidades_mesa(te: TablaEquity) -> dict[str, float]:
     resultado["total: tantos netos pareja 1-3"] = float(
         (prob[:, 0] * te.tantos_netos[:, 0, :].sum(axis=1)).sum())
     return resultado
+
+
+def exportar_descartes_csv(filas: list[MejorDescarte], baraja: Baraja, objetivo: Objetivo,
+                           ruta: str | Path) -> Path:
+    """Exporta la tabla de descartes recomendados (una fila por mano y posición)."""
+    ruta = _preparar(ruta)
+    with ruta.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["mano", "posicion", "objetivo", "me_quedo", "tiro", "cartas_pedidas",
+                    "valor", "segunda_opcion", "margen", "valor_servida"])
+        for r in filas:
+            segunda = r.segunda.texto(baraja) if r.segunda else ""
+            w.writerow([r.mano, r.posicion, objetivo.nombre,
+                        texto_conteos(r.mejor.conservadas, baraja),
+                        texto_conteos(r.mejor.descartadas, baraja), r.mejor.n_descartes,
+                        f"{r.valor:.6f}", segunda, f"{r.margen:.6f}", f"{r.valor_servida:.6f}"])
+    return ruta
 
 
 def graficar_posicion(te: TablaEquity, ruta: str | Path) -> Path:

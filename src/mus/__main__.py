@@ -36,6 +36,7 @@ from mus.analisis import (
     distribucion_exacta,
     distribucion_sumas,
     exportar_comparacion_csv,
+    exportar_descartes_csv,
     exportar_equity_csv,
     exportar_equity_json,
     exportar_rankings_csv,
@@ -48,6 +49,15 @@ from mus.analisis import (
 )
 from mus.cartas import parsear_mano
 from mus.condiciones import AYUDA_SINTAXIS, parsear_condicion
+from mus.descarte import (
+    OBJETIVOS,
+    Objetivo,
+    texto_conteos,
+    evaluar_descartes,
+    mejores_descartes,
+    objetivo_con_pesos,
+    simular_descarte,
+)
 from mus.equity import POSICIONES, EquityMano, cargar_tabla_equity, equity, simular_equity
 from mus.evaluacion import Lance, jugada_pares, puntos_juego, resolver_mano, suma
 from mus.reglas import ReglasMus, Variante
@@ -217,6 +227,59 @@ def cmd_grafica_condicion(args: argparse.Namespace) -> None:
     print(f"Guardado en {graficar_condicion(sin, con, args.salida)}")
 
 
+def _objetivo(args: argparse.Namespace) -> Objetivo:
+    return objetivo_con_pesos(args.pesos) if args.pesos else OBJETIVOS[args.objetivo]
+
+
+def cmd_descarte(args: argparse.Namespace) -> None:
+    reglas = _reglas(args)
+    te = cargar_tabla_equity(reglas)
+    objetivo = _objetivo(args)
+    mano = parsear_mano(args.mano, reglas)
+    baraja = te.tabla.baraja
+    valoraciones, servida = evaluar_descartes(mano, args.posicion, te, objetivo)
+    print(f"{mano.texto(baraja)} en posición {args.posicion} ({NOMBRE_POSICION[args.posicion]}); "
+          f"objetivo: {objetivo.nombre}")
+    print("Valoración con la equity del reparto inicial (Fase 2): los rivales aún no se "
+          "han descartado. Valores esperados sobre la mano final.")
+    cabecera = (f"  {'#':>2}  {'me quedo':<10}{'tiro':<9}{'valor':>8}{'tantos':>8}"
+                f"{'P(pares)':>9}{'P(juego)':>9}{'P(31)':>7}   gano: "
+                + " ".join(f"{l.value[:6]:>6}" for l in Lance))
+    print(cabecera)
+
+    def fila(etiqueta: str, quedo: str, tiro: str, v) -> str:
+        return (f"  {etiqueta:>2}  {quedo:<10}{tiro:<9}{v.valor:>8.3f}{v.tantos_netos:>+8.3f}"
+                f"{v.p_pares:>9.3f}{v.p_juego:>9.3f}{v.p_31:>7.3f}         "
+                + " ".join(f"{g:>6.3f}" for g in v.gana_individual))
+
+    for k, v in enumerate(valoraciones, start=1):
+        o = v.opcion
+        print(fila(str(k), texto_conteos(o.conservadas, baraja), texto_conteos(o.descartadas, baraja), v))
+    print(fila("", "servida", "(=cortar)", servida) + "   <- referencia, no es opción")
+    mejor = valoraciones[0]
+    print(f"\nRecomendación: {mejor.opcion.texto(baraja)} "
+          f"(mejora esperada {mejor.valor - servida.valor:+.3f} frente a la mano servida)")
+
+    if args.n:
+        print(f"\nMonte Carlo ({args.n} robos por opción, IC 95 %) del valor de cada opción:")
+        valores = objetivo.valores(te, args.posicion)
+        for v in valoraciones:
+            sim = simular_descarte(mano, v.opcion, args.n, reglas, valores=valores,
+                                   semilla=args.semilla)
+            dentro = sim.valor.contiene(v.valor) and sim.p_juego.contiene(v.p_juego)
+            print(f"  {v.opcion.texto(baraja):<34} exacto {v.valor:8.4f}  MC {sim.valor}  "
+                  f"P(juego) {sim.p_juego}  {'ok' if dentro else 'FUERA'}")
+
+
+def cmd_descarte_tabla(args: argparse.Namespace) -> None:
+    reglas = _reglas(args)
+    te = cargar_tabla_equity(reglas)
+    objetivo = _objetivo(args)
+    filas = mejores_descartes(te, objetivo)
+    print(f"Guardado en {exportar_descartes_csv(filas, te.tabla.baraja, objetivo, args.csv)} "
+          f"({len(filas)} filas; objetivo: {objetivo.nombre})")
+
+
 def crear_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mus", description="Motor de estadísticas del mus.",
@@ -297,6 +360,28 @@ def crear_parser() -> argparse.ArgumentParser:
     p.add_argument("--companero", required=True, help=ayuda_companero)
     p.add_argument("--salida", required=True)
     p.set_defaults(func=cmd_grafica_condicion)
+
+    ayuda_pesos = ('Tantos netos ponderados por lance, ENTRE COMILLAS, p. ej. "grande=2,punto=0" '
+                   "(los lances no citados pesan 1). Sustituye a --objetivo.")
+    for nombre, ayuda, func in (
+        ("descarte", "Valora todas las formas de descartarse de una mano.", cmd_descarte),
+        ("descarte-tabla", "Descarte recomendado de todas las manos y posiciones (CSV).",
+         cmd_descarte_tabla),
+    ):
+        p = sub.add_parser(nombre, help=ayuda)
+        if nombre == "descarte":
+            p.add_argument("mano", help='Mano, p. ej. "R R C 5".')
+            p.add_argument("--posicion", type=int, choices=POSICIONES, default=1)
+            p.add_argument("--n", type=int, default=0,
+                           help="Robos Monte Carlo por opción para verificar (0 = solo exacto).")
+            p.add_argument("--semilla", type=int, default=None)
+        else:
+            p.add_argument("--csv", required=True)
+        p.add_argument("--objetivo", choices=list(OBJETIVOS), default="tantos",
+                       help="tantos = tantos netos en paso; grande/chica/pares/juego = "
+                            "P(gano yo ese lance).")
+        p.add_argument("--pesos", help=ayuda_pesos)
+        p.set_defaults(func=func)
     return parser
 
 

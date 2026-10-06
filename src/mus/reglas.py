@@ -40,6 +40,43 @@ class Puntuacion:
     punto: int = 1
 
 
+class Rebarajado(str, Enum):
+    """Qué cartas se barajan para seguir robando cuando se agota el mazo."""
+
+    DESCARTES_ANTERIORES = "descartes_anteriores"
+    """Los descartes de las rondas anteriores, no los de la ronda en curso (por defecto)."""
+
+    TODOS_LOS_DESCARTES = "todos_los_descartes"
+    """Todos los descartes hechos hasta ese momento, incluidos los de la ronda en curso."""
+
+
+@dataclass(frozen=True)
+class ReglasDescarte:
+    """Reglas del mus (descartes).
+
+    Atributos:
+        minimo, maximo: cartas que hay que descartar si hay mus. Por defecto
+            de 1 a 4: quedarse servido equivale a cortar.
+        rebarajado: qué se baraja cuando se agota el mazo (solo puede pasar a
+            partir de la segunda ronda: en la primera se piden como mucho 16
+            cartas y quedan 24).
+        limite_rondas: rondas de mus permitidas (``None`` = sin límite).
+
+    Se roba siempre en orden desde la mano.
+    """
+
+    minimo: int = 1
+    maximo: int = 4
+    rebarajado: Rebarajado = Rebarajado.DESCARTES_ANTERIORES
+    limite_rondas: int | None = None
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.minimo <= self.maximo <= 4:
+            raise ValueError("Debe cumplirse 0 <= minimo <= maximo <= 4")
+        if self.limite_rondas is not None and self.limite_rondas < 1:
+            raise ValueError("limite_rondas debe ser positivo o None")
+
+
 @dataclass(frozen=True)
 class ReglasMus:
     """Reglas configurables de una partida de mus.
@@ -53,6 +90,7 @@ class ReglasMus:
             acepta :func:`mus.cartas.parsear_mano`.
         puntuacion: tantos de cada jugada.
         tantos_partida: tantos necesarios para ganar un juego.
+        descarte: reglas del mus (cuántas cartas se descartan, mazo agotado).
     """
 
     variante: Variante = Variante.OCHO_REYES
@@ -61,6 +99,7 @@ class ReglasMus:
     composicion_31_real: str = "7 7 7 S"
     puntuacion: Puntuacion = field(default_factory=Puntuacion)
     tantos_partida: int = 40
+    descarte: ReglasDescarte = field(default_factory=ReglasDescarte)
 
     def __post_init__(self) -> None:
         if len(set(self.orden_juego)) != len(self.orden_juego):

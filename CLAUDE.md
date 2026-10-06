@@ -70,5 +70,11 @@ Variante alternativa a soportar: 4 reyes / 4 ases.
 - Entorno: Python 3.14 en `.venv` (`pip install -e ".[dev]"`). Las salidas generadas van a `resultados/` (ignorado por git).
 - Reglas confirmadas y diseño: ver `docs/decisiones.md`.
 - Para resolver lances de forma vectorizada usar `simulacion.ganadores_lance` (aplica el filtro del punto; repartos siempre en orden de juego, columna 0 = mano).
-- **Fase 2 – terminada, pendiente del visto bueno del usuario.** Módulos `condiciones` (predicados genéricos sobre una mano, sintaxis de texto) y `equity` (exacta por programación dinámica sobre el mazo restante, verificación Monte Carlo, tabla completa con caché en `resultados/cache/`). CLI: `equity`, `equity-tabla`, `ranking`, `mesa`, `grafica-posicion`, `grafica-condicion`.
+- **Fase 2 – terminada y aprobada.** Módulos `condiciones` (predicados genéricos sobre una mano, sintaxis de texto) y `equity` (exacta por programación dinámica sobre el mazo restante, verificación Monte Carlo, tabla completa con caché en `resultados/cache/`). CLI: `equity`, `equity-tabla`, `ranking`, `mesa`, `grafica-posicion`, `grafica-condicion`.
 - Tests: `pytest` ejecuta solo los rápidos (~10 s); `pytest -m slow` lanza los lentos (fuerza bruta, Monte Carlo grandes, tabla completa). Cambiar el cálculo de equity exige subir `equity.VERSION_MOTOR` para invalidar la caché.
+- **Fase 3 – en curso.** Plan y reglas del mus confirmadas en `docs/decisiones.md`. Reglas del descarte en `ReglasMus.descarte` (`ReglasDescarte`: mínimo/máximo de cartas, rebarajado, límite de rondas).
+  - **3a – terminada, pendiente del visto bueno.** Módulo `descarte` (opciones distintas, distribución exacta de la mano final, objetivos con pesos por lance, tabla de descartes recomendados, verificación Monte Carlo). CLI: `descarte`, `descarte-tabla`. Valora con la equity de la Fase 2: los rivales aún no se han descartado.
+  - 3b (mesa tras el mus) y 3c (cortar o no): pendientes.
+
+## Pendientes para fases futuras
+- **Fase 5 (entrenador):** usar el número de cartas que pide cada jugador (información pública) como condición sobre su mano, a partir de la política de descarte. Será clave para el entrenador.

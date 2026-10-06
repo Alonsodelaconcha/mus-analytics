@@ -33,7 +33,7 @@ import hashlib
 import os
 from collections.abc import Mapping
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from math import comb
 from pathlib import Path
@@ -43,7 +43,7 @@ import numpy as np
 from mus.cartas import Mano, parsear_mano
 from mus.condiciones import Condicion
 from mus.evaluacion import JUGADORES, Lance, pareja_de
-from mus.reglas import REGLAS_POR_DEFECTO, ReglasMus
+from mus.reglas import REGLAS_POR_DEFECTO, ReglasDescarte, ReglasMus
 from mus.simulacion import (
     Estimacion,
     EstimacionMedia,
@@ -448,7 +448,10 @@ def cargar_tabla_equity(reglas: ReglasMus = REGLAS_POR_DEFECTO,
     El fichero se nombra con un hash de las reglas y de :data:`VERSION_MOTOR`,
     así que cambiar cualquier regla o el motor obliga a recalcular.
     """
-    huella = hashlib.sha256(f"{reglas!r}|{VERSION_MOTOR}".encode()).hexdigest()[:16]
+    # Las reglas del descarte no afectan a la equity de una mano servida: se
+    # normalizan para que cambiarlas no obligue a recalcular la tabla.
+    relevantes = replace(reglas, descarte=ReglasDescarte())
+    huella = hashlib.sha256(f"{relevantes!r}|{VERSION_MOTOR}".encode()).hexdigest()[:16]
     ruta = Path(directorio) / f"equity_{huella}.npz"
     tabla = construir_tabla(reglas)
     if ruta.exists():

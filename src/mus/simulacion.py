@@ -126,13 +126,26 @@ def _extraer(
     if mazo is None:
         mazo = np.array(tabla.baraja.cartas(), dtype=np.int8)
     potencias = potencias_codigo(tabla.baraja)
-    cartas_usadas = n_manos * CARTAS_POR_MANO
-    resultado = np.empty((n, n_manos), dtype=np.int16)
+    cartas = robar(n, mazo, n_manos * CARTAS_POR_MANO, rng, tamano_lote)
+    codigos = potencias[cartas].reshape(n, n_manos, CARTAS_POR_MANO).sum(axis=2)
+    return tabla.indices_de_codigos(codigos).astype(np.int16)
+
+
+def robar(
+    n: int, mazo: np.ndarray, n_cartas: int, rng: np.random.Generator,
+    tamano_lote: int = TAMANO_LOTE,
+) -> np.ndarray:
+    """``n`` extracciones independientes de ``n_cartas`` cartas sin reemplazo.
+
+    ``mazo`` contiene los rangos de las cartas disponibles (con repeticiones).
+    Devuelve un array (n, n_cartas) de rangos, en el orden en que se roban.
+    """
+    if n_cartas > len(mazo):
+        raise ValueError(f"No se pueden robar {n_cartas} cartas de un mazo de {len(mazo)}")
+    resultado = np.empty((n, n_cartas), dtype=np.int8)
     inicio = 0
     for m in _lotes(n, tamano_lote):
-        barajados = rng.permuted(np.tile(mazo, (m, 1)), axis=1)[:, :cartas_usadas]
-        codigos = potencias[barajados].reshape(m, n_manos, CARTAS_POR_MANO).sum(axis=2)
-        resultado[inicio:inicio + m] = tabla.indices_de_codigos(codigos)
+        resultado[inicio:inicio + m] = rng.permuted(np.tile(mazo, (m, 1)), axis=1)[:, :n_cartas]
         inicio += m
     return resultado
 

@@ -20,7 +20,7 @@ from mus.analisis import (
     ranking,
 )
 from mus.condiciones import sin_pares
-from mus.equity import POSICIONES, TablaEquity, equity
+from mus.equity import TablaEquity, equity
 from mus.evaluacion import Lance
 from mus.reglas import ReglasMus, Variante
 from mus.tablas import construir_tabla
@@ -65,11 +65,12 @@ def test_grafica(tmp_path):
 @pytest.fixture(scope="module")
 def tabla_equity_pequena():
     """Tabla de equity con valores reales solo en tres manos (A A A A, una
-    intermedia y R R R R): las exportaciones no dependen de que estén todas."""
+    intermedia y R R R R) y en la posición 1: las exportaciones no dependen de
+    que estén todas."""
     tabla = construir_tabla()
     arrays = [np.zeros((tabla.n_manos, 4, 5)) for _ in range(4)]
     for i in (0, tabla.n_manos // 2, tabla.n_manos - 1):
-        for p in POSICIONES:
+        for p in (1,):
             for l, e in enumerate(equity(tabla.manos[i], p).por_lance.values()):
                 for a, v in zip(arrays, (e.p_se_juega, e.p_gana_individual,
                                          e.p_gana_pareja, e.tantos_netos)):
