@@ -301,23 +301,30 @@ def _equity_lance(ctx: _Contexto, datos: _DatosLance, tabla: TablaManos, heroe: 
 
 
 def _mascaras(tabla: TablaManos, posicion: int, companero: Condicion | None,
-              rivales: Mapping[int, Condicion] | None) -> tuple[dict[int, np.ndarray], str]:
+              rivales: Mapping[int, Condicion] | None, pesos: np.ndarray | None
+              ) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray], str]:
+    """Pesos por asiento: los de base (``pesos`` o 1) y los de base × condiciones."""
     condiciones: dict[int, Condicion] = dict(rivales or {})
     if any(s not in rivales_de(posicion) for s in condiciones):
         raise ValueError(f"Los rivales de la posición {posicion} son {rivales_de(posicion)}")
     if companero is not None:
         condiciones[companero_de(posicion)] = companero
-    mascaras = {s: np.ones(tabla.n_manos) for s in POSICIONES if s != posicion}
+    if pesos is not None and pesos.shape != (len(POSICIONES), tabla.n_manos):
+        raise ValueError(f"pesos debe tener forma (4, {tabla.n_manos})")
+    base = {s: (np.asarray(pesos[s - 1], dtype=np.float64) if pesos is not None
+                else np.ones(tabla.n_manos)) for s in POSICIONES if s != posicion}
+    mascaras = dict(base)
     for s, c in condiciones.items():
-        mascaras[s] = c.mascara(tabla).astype(np.float64)
-    descripcion = "; ".join(f"jugador {s}: {c}" for s, c in sorted(condiciones.items()))
-    return mascaras, descripcion or "sin información"
+        mascaras[s] = base[s] * c.mascara(tabla)
+    partes = (["manos de los demás reponderadas"] if pesos is not None else []) + \
+        [f"jugador {s}: {c}" for s, c in sorted(condiciones.items())]
+    return base, mascaras, "; ".join(partes) or "sin información"
 
 
 def _equity_con_contexto(ctx: _Contexto, tabla: TablaManos, heroe: int, posicion: int,
-                         companero: Condicion | None,
-                         rivales: Mapping[int, Condicion] | None) -> EquityMano:
-    mascaras, descripcion = _mascaras(tabla, posicion, companero, rivales)
+                         companero: Condicion | None, rivales: Mapping[int, Condicion] | None,
+                         pesos: np.ndarray | None = None) -> EquityMano:
+    base, mascaras, descripcion = _mascaras(tabla, posicion, companero, rivales, pesos)
     q = companero_de(posicion)
     a, b = rivales_de(posicion)
     z = ctx.total(mascaras[q], mascaras[a], ctx.x_fija(mascaras[b]))
@@ -326,7 +333,7 @@ def _equity_con_contexto(ctx: _Contexto, tabla: TablaManos, heroe: int, posicion
     datos = _datos(tabla)
     por_lance = {l: _equity_lance(ctx, datos[l], tabla, heroe, l, posicion, mascaras, z)
                  for l in Lance}
-    p_cond = z / ctx.total(np.ones(ctx.n), np.ones(ctx.n), ctx.x_fija(np.ones(ctx.n)))
+    p_cond = z / ctx.total(base[q], base[a], ctx.x_fija(base[b]))
     return EquityMano(tabla.manos[heroe].texto(tabla.baraja), posicion, por_lance, p_cond,
                       descripcion)
 
@@ -341,6 +348,7 @@ def equity(
     *,
     companero: Condicion | None = None,
     rivales: Mapping[int, Condicion] | None = None,
+    pesos: np.ndarray | None = None,
 ) -> EquityMano:
     """Equity exacta de una mano en una posición (1 = mano, 4 = postre).
 
@@ -349,6 +357,11 @@ def equity(
         posicion: posición del héroe.
         companero: condición conocida sobre la mano del compañero.
         rivales: condiciones sobre los rivales, por posición absoluta.
+        pesos: array (4, manos) con el peso relativo de cada mano en cada
+            asiento frente al reparto uniforme (se usa en los otros tres). Con
+            pesos = q/p0, la distribución de los demás se inclina hacia la
+            marginal q (p. ej. la de la mesa tras el mus) conservando el efecto
+            de las cartas retiradas. Las condiciones se aplican encima.
 
     Raises:
         ValueError: si la posición no es válida o las condiciones son imposibles.
@@ -359,7 +372,8 @@ def equity(
     if isinstance(mano, str):
         mano = parsear_mano(mano, reglas)
     heroe = tabla.indice(mano)
-    return _equity_con_contexto(_Contexto(tabla, heroe), tabla, heroe, posicion, companero, rivales)
+    return _equity_con_contexto(_Contexto(tabla, heroe), tabla, heroe, posicion, companero,
+                                rivales, pesos)
 
 
 @dataclass(frozen=True, eq=False)
@@ -386,8 +400,9 @@ class TablaEquity:
 _METRICAS = ("p_se_juega", "p_gana_individual", "p_gana_pareja", "tantos_netos")
 
 
-def _filas_equity(reglas: ReglasMus, heroes: list[int]) -> np.ndarray:
-    """Equity sin información de varias manos: array (manos, posiciones, lances, métricas).
+def _filas_equity(reglas: ReglasMus, heroes: list[int], pesos: np.ndarray | None = None
+                  ) -> np.ndarray:
+    """Equity de varias manos: array (manos, posiciones, lances, métricas).
 
     Es una función de módulo para poder ejecutarse en otro proceso.
     """
@@ -396,34 +411,42 @@ def _filas_equity(reglas: ReglasMus, heroes: list[int]) -> np.ndarray:
     for i, h in enumerate(heroes):
         ctx = _Contexto(tabla, h)  # se reutiliza en las 4 posiciones
         for p in POSICIONES:
-            por_lance = _equity_con_contexto(ctx, tabla, h, p, None, None).por_lance
+            por_lance = _equity_con_contexto(ctx, tabla, h, p, None, None, pesos).por_lance
             for l, e in enumerate(por_lance.values()):
                 resultado[i, p - 1, l] = [getattr(e, m) for m in _METRICAS]
     return resultado
 
 
 def calcular_tabla_equity(reglas: ReglasMus = REGLAS_POR_DEFECTO,
-                          procesos: int | None = None) -> TablaEquity:
-    """Calcula (y cachea en memoria por reglas) la equity sin información de todas las manos.
+                          procesos: int | None = None,
+                          pesos: np.ndarray | None = None) -> TablaEquity:
+    """Calcula (y cachea en memoria) la equity de todas las manos en todas las posiciones.
 
     Args:
         procesos: procesos en paralelo (1 = sin paralelismo). Por defecto,
             hasta 4: el cálculo está limitado por el ancho de banda de memoria
             y más procesos no aceleran (medido: 1 → 83 s, 4 → 43 s, 8 → 45 s).
+        pesos: array (4, manos) que reponderan las manos de los demás asientos
+            (ver :func:`equity`). ``None`` = reparto inicial uniforme.
     """
-    return _calcular_tabla_equity(reglas, procesos or min(4, os.cpu_count() or 1))
+    clave_pesos = None if pesos is None else np.ascontiguousarray(pesos, np.float64).tobytes()
+    return _calcular_tabla_equity(reglas, procesos or min(4, os.cpu_count() or 1), clave_pesos)
 
 
-@lru_cache(maxsize=None)
-def _calcular_tabla_equity(reglas: ReglasMus, procesos: int) -> TablaEquity:
+@lru_cache(maxsize=8)
+def _calcular_tabla_equity(reglas: ReglasMus, procesos: int, clave_pesos: bytes | None
+                           ) -> TablaEquity:
     tabla = construir_tabla(reglas)
+    pesos = (None if clave_pesos is None
+             else np.frombuffer(clave_pesos, np.float64).reshape(len(POSICIONES), -1))
     heroes = list(range(tabla.n_manos))
     if procesos == 1:
-        datos = _filas_equity(reglas, heroes)
+        datos = _filas_equity(reglas, heroes, pesos)
     else:
         bloques = [heroes[i::procesos * 4] for i in range(procesos * 4)]  # bloques equilibrados
         with ProcessPoolExecutor(max_workers=procesos) as ejecutor:
-            partes = list(ejecutor.map(_filas_equity, [reglas] * len(bloques), bloques))
+            partes = list(ejecutor.map(_filas_equity, [reglas] * len(bloques), bloques,
+                                       [pesos] * len(bloques)))
         datos = np.zeros((tabla.n_manos, len(POSICIONES), len(Lance), len(_METRICAS)))
         for bloque, parte in zip(bloques, partes):
             datos[bloque] = parte
@@ -442,22 +465,26 @@ VERSION_MOTOR = "2"
 
 
 def cargar_tabla_equity(reglas: ReglasMus = REGLAS_POR_DEFECTO,
-                        directorio: str | Path = "resultados/cache") -> TablaEquity:
+                        directorio: str | Path = "resultados/cache",
+                        pesos: np.ndarray | None = None) -> TablaEquity:
     """Como :func:`calcular_tabla_equity`, pero guarda el resultado en disco.
 
-    El fichero se nombra con un hash de las reglas y de :data:`VERSION_MOTOR`,
-    así que cambiar cualquier regla o el motor obliga a recalcular.
+    El fichero se nombra con un hash de las reglas, de los pesos y de
+    :data:`VERSION_MOTOR`, así que cambiar cualquiera de ellos obliga a recalcular.
     """
     # Las reglas del descarte no afectan a la equity de una mano servida: se
     # normalizan para que cambiarlas no obligue a recalcular la tabla.
     relevantes = replace(reglas, descarte=ReglasDescarte())
-    huella = hashlib.sha256(f"{relevantes!r}|{VERSION_MOTOR}".encode()).hexdigest()[:16]
+    texto = f"{relevantes!r}|{VERSION_MOTOR}"
+    if pesos is not None:
+        texto += "|" + hashlib.sha256(np.ascontiguousarray(pesos, np.float64).tobytes()).hexdigest()
+    huella = hashlib.sha256(texto.encode()).hexdigest()[:16]
     ruta = Path(directorio) / f"equity_{huella}.npz"
     tabla = construir_tabla(reglas)
     if ruta.exists():
         with np.load(ruta) as f:
             return _tabla_equity_de_arrays(tabla, f["datos"])
-    te = calcular_tabla_equity(reglas)
+    te = calcular_tabla_equity(reglas, pesos=pesos)
     ruta.parent.mkdir(parents=True, exist_ok=True)
     datos = np.stack([te.se_juega, te.gana_individual, te.gana_pareja, te.tantos_netos], axis=-1)
     np.savez_compressed(ruta, datos=datos)
@@ -515,7 +542,7 @@ def simular_equity(
         mano = parsear_mano(mano, reglas)
     heroe = tabla.indice(mano)
     repartos = repartir_con_mano(n, tabla, generador(semilla), heroe, posicion)
-    mascaras, _ = _mascaras(tabla, posicion, companero, rivales)
+    _, mascaras, _ = _mascaras(tabla, posicion, companero, rivales, None)
     acepta = np.ones(n, dtype=bool)
     for asiento, m in mascaras.items():
         acepta &= m[repartos[:, asiento - 1]] > 0

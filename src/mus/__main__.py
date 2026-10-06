@@ -30,6 +30,8 @@ import sys
 import time
 from collections.abc import Sequence
 
+import numpy as np
+
 from mus.analisis import (
     comparar_exacto_mc,
     comparativa_mano,
@@ -51,7 +53,10 @@ from mus.cartas import parsear_mano
 from mus.condiciones import AYUDA_SINTAXIS, parsear_condicion
 from mus.descarte import (
     OBJETIVOS,
+    UMBRAL_EQUIVALENCIA,
+    CartasPedidas,
     Objetivo,
+    cartas_pedidas,
     texto_conteos,
     evaluar_descartes,
     mejores_descartes,
@@ -61,7 +66,16 @@ from mus.descarte import (
 from mus.equity import POSICIONES, EquityMano, cargar_tabla_equity, equity, simular_equity
 from mus.evaluacion import Lance, jugada_pares, puntos_juego, resolver_mano, suma
 from mus.reglas import ReglasMus, Variante
+from mus.simulacion import Estimacion
 from mus.tablas import construir_tabla
+from mus.tras_mus import (
+    SIMULACIONES_POR_VUELTA,
+    MesaTrasMus,
+    iterar_tras_mus,
+    simular_ronda_mus,
+    valorar_opciones_simuladas,
+    verificar_mesa,
+)
 
 NOMBRE_POSICION = {1: "mano", 2: "segundo", 3: "tercero", 4: "postre"}
 
@@ -237,11 +251,21 @@ def cmd_descarte(args: argparse.Namespace) -> None:
     objetivo = _objetivo(args)
     mano = parsear_mano(args.mano, reglas)
     baraja = te.tabla.baraja
-    valoraciones, servida = evaluar_descartes(mano, args.posicion, te, objetivo)
+    te_servida, mesa = te, None
+    if args.tras_mus:
+        mesa = _mesa_tras_mus(reglas)
+        te = mesa.tabla
+    valoraciones, _ = evaluar_descartes(mano, args.posicion, te, objetivo)
+    servida = evaluar_descartes(mano, args.posicion, te_servida, objetivo)[1]
     print(f"{mano.texto(baraja)} en posición {args.posicion} ({NOMBRE_POSICION[args.posicion]}); "
           f"objetivo: {objetivo.nombre}")
-    print("Valoración con la equity del reparto inicial (Fase 2): los rivales aún no se "
-          "han descartado. Valores esperados sobre la mano final.")
+    if args.tras_mus:
+        print("Valoración contra la mesa tras el mus: los cuatro se descartan con la política "
+              "del punto fijo (3b). La mano servida (= cortar) se valora contra el reparto "
+              "inicial, porque si se corta nadie se descarta. Aún sin efecto de selección (3c).")
+    else:
+        print("Valoración con la equity del reparto inicial (Fase 2): los rivales aún no se "
+              "han descartado. Valores esperados sobre la mano final.")
     cabecera = (f"  {'#':>2}  {'me quedo':<10}{'tiro':<9}{'valor':>8}{'tantos':>8}"
                 f"{'P(pares)':>9}{'P(juego)':>9}{'P(31)':>7}   gano: "
                 + " ".join(f"{l.value[:6]:>6}" for l in Lance))
@@ -252,15 +276,27 @@ def cmd_descarte(args: argparse.Namespace) -> None:
                 f"{v.p_pares:>9.3f}{v.p_juego:>9.3f}{v.p_31:>7.3f}         "
                 + " ".join(f"{g:>6.3f}" for g in v.gana_individual))
 
+    mejor = valoraciones[0]
+    equivalentes = [v for v in valoraciones if mejor.valor - v.valor < args.umbral]
     for k, v in enumerate(valoraciones, start=1):
         o = v.opcion
-        print(fila(str(k), texto_conteos(o.conservadas, baraja), texto_conteos(o.descartadas, baraja), v))
+        marca = "≈" if len(equivalentes) > 1 and k <= len(equivalentes) else ""
+        print(fila(f"{marca}{k}", texto_conteos(o.conservadas, baraja),
+                   texto_conteos(o.descartadas, baraja), v))
     print(fila("", "servida", "(=cortar)", servida) + "   <- referencia, no es opción")
-    mejor = valoraciones[0]
-    print(f"\nRecomendación: {mejor.opcion.texto(baraja)} "
-          f"(mejora esperada {mejor.valor - servida.valor:+.3f} frente a la mano servida)")
+    if len(equivalentes) > 1:
+        print(f"\nPrácticamente equivalentes (diferencia < {args.umbral:g}, marcadas con ≈): "
+              + "; ".join(v.opcion.texto(baraja) for v in equivalentes)
+              + f". Mejora esperada {mejor.valor - servida.valor:+.3f} frente a la mano servida.")
+    else:
+        segunda = valoraciones[1].valor if len(valoraciones) > 1 else mejor.valor
+        print(f"\nRecomendación: {mejor.opcion.texto(baraja)} "
+              f"(ventaja {mejor.valor - segunda:.3f} sobre la segunda opción; "
+              f"mejora esperada {mejor.valor - servida.valor:+.3f} frente a la mano servida)")
 
-    if args.n:
+    if args.n and mesa is not None:
+        _descarte_simulado(mano, args, mesa, servida_tantos=servida.tantos_netos)
+    elif args.n:
         print(f"\nMonte Carlo ({args.n} robos por opción, IC 95 %) del valor de cada opción:")
         valores = objetivo.valores(te, args.posicion)
         for v in valoraciones:
@@ -275,9 +311,140 @@ def cmd_descarte_tabla(args: argparse.Namespace) -> None:
     reglas = _reglas(args)
     te = cargar_tabla_equity(reglas)
     objetivo = _objetivo(args)
-    filas = mejores_descartes(te, objetivo)
-    print(f"Guardado en {exportar_descartes_csv(filas, te.tabla.baraja, objetivo, args.csv)} "
-          f"({len(filas)} filas; objetivo: {objetivo.nombre})")
+    if args.tras_mus:
+        filas = mejores_descartes(_mesa_tras_mus(reglas).tabla, objetivo, te_servida=te)
+    else:
+        filas = mejores_descartes(te, objetivo)
+    ruta = exportar_descartes_csv(filas, te.tabla.baraja, objetivo, args.csv, args.umbral)
+    print(f"Guardado en {ruta} ({len(filas)} filas; objetivo: {objetivo.nombre})")
+    equivalentes = sum(f.equivalentes(args.umbral) for f in filas)
+    print(f"Decisiones prácticamente equivalentes (margen < {args.umbral:g}): "
+          f"{equivalentes} de {len(filas)}")
+    _imprimir_cartas_pedidas(cartas_pedidas(filas, te.tabla))
+
+
+def _imprimir_cartas_pedidas(filas: list[CartasPedidas]) -> None:
+    print("\nCartas pedidas con el descarte recomendado: manos distintas (sin ponderar) "
+          "y % de repartos (ponderado por la probabilidad de cada mano)")
+    print(f"  {'posición':<10}" + "".join(f"{f'{k} carta' + ('s' if k > 1 else ''):>20}"
+                                          for k in range(1, 5)))
+    for f in filas:
+        print(f"  {f.posicion:<10}" + "".join(f"{f.manos[k]:>8} manos {100 * f.repartos[k]:>5.1f} %"
+                                            for k in range(1, 5)))
+
+
+def _descarte_simulado(mano, args: argparse.Namespace, mesa: MesaTrasMus,
+                       servida_tantos: float) -> None:
+    """Valora las opciones simulando la ronda con esta mano fija (sin simplificaciones)."""
+    baraja = mesa.tabla.tabla.baraja
+    inicio = time.perf_counter()
+    resultado = valorar_opciones_simuladas(mano, args.posicion, mesa.politica, args.n,
+                                           semilla=args.semilla)
+    print(f"\nSimulación de la ronda con esta mano fija ({args.n} repartos, los mismos para "
+          f"todas las opciones; {time.perf_counter() - inicio:.0f} s). Tantos netos totales "
+          "en paso, IC 95 %. Incluye mis propios descartes y la conjunta real de los rivales:")
+    for r in resultado:
+        d = r.diferencia_con_la_mejor
+        print(f"  {r.opcion.texto(baraja):<34} {r.tantos}   frente a la mejor: "
+              f"{d.media:+.4f} [{d.intervalo[0]:+.4f}, {d.intervalo[1]:+.4f}]")
+    mejor = resultado[0].tantos
+    print(f"  Cortar (nadie se descarta; exacto, Fase 2): {servida_tantos:+.4f}  ->  dar mus "
+          f"cambia {mejor.media - servida_tantos:+.4f} [{mejor.intervalo[0] - servida_tantos:+.4f}, "
+          f"{mejor.intervalo[1] - servida_tantos:+.4f}]")
+
+
+def _mesa_tras_mus(reglas: ReglasMus, objetivo: Objetivo = OBJETIVOS["tantos"],
+                   informar: bool = False, max_iteraciones: int = 12,
+                   simulaciones: int = SIMULACIONES_POR_VUELTA) -> MesaTrasMus:
+    """Mesa tras el mus (punto fijo). La primera vez simula varias vueltas
+    (~30-60 s cada una); después se cargan de resultados/cache."""
+    mesa = iterar_tras_mus(reglas, objetivo, max_iteraciones=max_iteraciones,
+                           simulaciones=simulaciones,
+                           informar=(lambda s: print(f"  {s}", flush=True)) if informar else None)
+    if not informar:
+        print(f"(Mesa tras el mus: {'punto fijo' if mesa.convergio else 'SIN CONVERGER'} "
+              f"tras {len(mesa.historia)} vueltas.)")
+    if not mesa.convergio:
+        print("AVISO: la iteración no ha convergido; los resultados usan la última política.")
+    return mesa
+
+
+def cmd_tras_mus(args: argparse.Namespace) -> None:
+    reglas = _reglas(args)
+    objetivo = _objetivo(args)
+    print(f"Mesa tras una ronda de mus. Todos dan mus (sin efecto de selección: 3c); "
+          f"política de descarte: {objetivo.nombre}.")
+    inicio = time.perf_counter()
+    mesa = _mesa_tras_mus(reglas, objetivo, informar=True, max_iteraciones=args.max_iter,
+                          simulaciones=args.n)
+    print(f"{'Punto fijo alcanzado' if mesa.convergio else 'NO ha convergido'} en "
+          f"{len(mesa.historia)} vueltas ({time.perf_counter() - inicio:.0f} s).")
+
+    tabla = mesa.tabla.tabla
+    rey = tabla.baraja.indice("R")
+    metricas = {
+        "pares": tabla.jugada_pares > 0, "medias": tabla.jugada_pares == 2,
+        "duples": tabla.jugada_pares == 3, "juego": tabla.tiene_juego,
+        "31": tabla.suma == 31, "40": tabla.suma == 40, "punto 30": tabla.suma == 30,
+        "al menos 1 rey": tabla.conteos[:, rey] >= 1, "2 reyes o más": tabla.conteos[:, rey] >= 2,
+    }
+    print("\nDistribución de las manos con que se juegan los lances:")
+    print(f"  {'P(...)':<16}{'reparto':>10}" + "".join(f"{f'tras mus {p}':>13}" for p in POSICIONES))
+    for nombre, m in metricas.items():
+        print(f"  {nombre:<16}{tabla.probabilidad[m].sum():>10.4f}"
+              + "".join(f"{mesa.marginales[p - 1][m].sum():>13.4f}" for p in POSICIONES))
+
+    print("\nCartas pedidas (% de repartos, ponderado):")
+    for p in POSICIONES:
+        pedidas = mesa.politica.cartas_pedidas(p)
+        print(f"  posición {p}: " + "   ".join(f"{k}: {100 * v:5.1f} %" for k, v in pedidas.items()))
+
+    inicial = probabilidades_mesa(mesa.tabla_inicial)
+    tras = probabilidades_mesa(mesa.tabla, mesa.marginales)
+    print("\nMesa (pareja 1-3 = la de la mano), reparto inicial -> tras el mus:")
+    print(f"  {'lance':<8}{'se juega':>18}{'gana pareja 1-3':>20}{'tantos pareja 1-3':>22}")
+    for l in Lance:
+        v = l.value
+        print(f"  {v:<8}"
+              f"{inicial[f'{v}: se juega']:>8.4f} -> {tras[f'{v}: se juega']:.4f}"
+              f"{inicial[f'{v}: gana la pareja 1-3']:>10.4f} -> {tras[f'{v}: gana la pareja 1-3']:.4f}"
+              f"{inicial[f'{v}: tantos netos pareja 1-3']:>+12.4f} -> "
+              f"{tras[f'{v}: tantos netos pareja 1-3']:+.4f}")
+    print(f"  {'total':<8}{'':>38}{inicial['total: tantos netos pareja 1-3']:>+12.4f} -> "
+          f"{tras['total: tantos netos pareja 1-3']:+.4f}")
+
+    if args.verificar:
+        _verificar_tras_mus(mesa, args.verificar, args.semilla)
+    if args.csv:
+        print(f"\nEquity tras el mus guardada en {exportar_equity_csv(mesa.tabla, args.csv)}")
+
+
+def _verificar_tras_mus(mesa: MesaTrasMus, n: int, semilla: int | None) -> None:
+    if semilla == mesa.semilla:
+        raise ValueError("La verificación necesita una semilla distinta de la de la mesa")
+    inicio = time.perf_counter()
+    sim = simular_ronda_mus(mesa.politica, n, semilla)
+    informe = verificar_mesa(mesa, sim)
+    print(f"\nVerificación con {n} rondas de mus simuladas de forma independiente "
+          f"({time.perf_counter() - inicio:.0f} s; IC 99,9 %):")
+    for s, (chi2, gl) in enumerate(informe.chi2_marginales, start=1):
+        print(f"  Marginal exacta del asiento {s}: χ² = {chi2:.0f} con {gl} g.l. "
+              f"(media esperada {gl}, desviación típica {np.sqrt(2 * gl):.0f})")
+    fuera = [c for c in informe.agregadas if not c.dentro]
+    print(f"  Magnitudes de mesa dentro del IC: {len(informe.agregadas) - len(fuera)} de "
+          f"{len(informe.agregadas)}" + (". Fuera:" if fuera else "."))
+    for c in fuera:
+        nombre = c.lance.value if c.lance else "total"
+        simulado = c.simulado.p if isinstance(c.simulado, Estimacion) else c.simulado.media
+        print(f"    asiento {c.asiento} {nombre:<7} {c.metrica:<15} modelo {c.prediccion:+.4f}  "
+              f"simulado {c.simulado}  diferencia {c.prediccion - simulado:+.4f}")
+    print("  Tantos netos totales mano a mano (manos con ≥ 5000 muestras):")
+    for e in informe.por_mano:
+        if e.manos_comparadas == 0:
+            print(f"    asiento {e.asiento}: ninguna mano con muestras suficientes (aumenta N)")
+            continue
+        print(f"    asiento {e.asiento}: {e.manos_comparadas} manos, error medio {e.error_medio:.4f}, "
+              f"máximo {e.error_maximo:.4f} ({e.mano_error_maximo}), fuera del IC {e.fuera_del_intervalo}")
 
 
 def crear_parser() -> argparse.ArgumentParser:
@@ -348,6 +515,23 @@ def crear_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("mesa", help="Probabilidades exactas de mesa por lance y posición.")
     p.set_defaults(func=cmd_mesa)
 
+    p = sub.add_parser("tras-mus", help="Mesa tras una ronda de mus: política de descarte en "
+                                         "punto fijo, distribución de manos y equity (3b).")
+    p.add_argument("--objetivo", choices=list(OBJETIVOS), default="tantos",
+                   help="Objetivo con que se descartan los cuatro jugadores.")
+    p.add_argument("--pesos", help='Tantos ponderados por lance, ENTRE COMILLAS, p. ej. '
+                                   '"grande=2" (sustituye a --objetivo).')
+    p.add_argument("--max-iter", type=int, default=12, help="Máximo de vueltas de la iteración.")
+    p.add_argument("--n", type=int, default=SIMULACIONES_POR_VUELTA,
+                   help="Rondas simuladas por vuelta para estimar la equity tras el mus.")
+    p.add_argument("--verificar", type=int, default=0, metavar="N",
+                   help="Simular N rondas más, de forma independiente, y compararlas con la "
+                        "mesa calculada (0 = no).")
+    p.add_argument("--semilla", type=int, default=1,
+                   help="Semilla de la verificación (distinta de la de la mesa).")
+    p.add_argument("--csv", help="Exportar la equity tras el mus (formato de equity-tabla).")
+    p.set_defaults(func=cmd_tras_mus)
+
     p = sub.add_parser("grafica-posicion", help="Equity siendo mano frente a postre.")
     p.add_argument("--salida", required=True)
     p.set_defaults(func=cmd_grafica_posicion)
@@ -369,11 +553,16 @@ def crear_parser() -> argparse.ArgumentParser:
          cmd_descarte_tabla),
     ):
         p = sub.add_parser(nombre, help=ayuda)
+        p.add_argument("--tras-mus", action="store_true",
+                       help="Valorar contra la mesa tras el mus (3b: los rivales también se "
+                            "descartan) en vez de contra el reparto inicial.")
         if nombre == "descarte":
             p.add_argument("mano", help='Mano, p. ej. "R R C 5".')
             p.add_argument("--posicion", type=int, choices=POSICIONES, default=1)
             p.add_argument("--n", type=int, default=0,
-                           help="Robos Monte Carlo por opción para verificar (0 = solo exacto).")
+                           help="Monte Carlo (0 = no). Sin --tras-mus: robos por opción para "
+                                "verificar la distribución exacta. Con --tras-mus: repartos "
+                                "para simular la ronda con esta mano fija.")
             p.add_argument("--semilla", type=int, default=None)
         else:
             p.add_argument("--csv", required=True)
@@ -381,6 +570,10 @@ def crear_parser() -> argparse.ArgumentParser:
                        help="tantos = tantos netos en paso; grande/chica/pares/juego = "
                             "P(gano yo ese lance).")
         p.add_argument("--pesos", help=ayuda_pesos)
+        p.add_argument("--umbral", type=float, default=UMBRAL_EQUIVALENCIA,
+                       help="Diferencia de valor por debajo de la cual dos opciones se "
+                            f"consideran prácticamente equivalentes (por defecto "
+                            f"{UMBRAL_EQUIVALENCIA:g}, en las unidades del objetivo).")
         p.set_defaults(func=func)
     return parser
 

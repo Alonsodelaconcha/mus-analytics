@@ -100,3 +100,62 @@ Cada entrada recoge qué se decidió y por qué. Las más recientes van al final
 **Simplificación: mis descartes no se descuentan de las manos rivales.** La tabla de equity supone que las cartas que he tirado podrían estar en manos de los rivales. El efecto se medirá en la 3b, cuando la equity se recalcule contra la mesa tras el mus.
 
 **Coste.** Las distribuciones de todas las manos y opciones se calculan en ~1 s usando una tabla de combinatorios indexada con NumPy (con listas de Python, la variante de 4 reyes tardaba 12 s). Valorar las opciones es un producto matriz-vector.
+
+**Ajustes tras la revisión del usuario.**
+- Las cartas pedidas se muestran también **ponderadas** por la probabilidad de cada mano, es decir, el % de repartos que se vería en la mesa. Ponderar cambia la imagen: las manos que piden 4 cartas son el 10,6 % de las manos distintas, pero solo el 6,5 % de los repartos.
+- Dos opciones cuyo valor difiere menos de `UMBRAL_EQUIVALENCIA` = 0,005 (en las unidades del objetivo, configurable con `--umbral`) se marcan como **prácticamente equivalentes** (≈). Medio punto porcentual o media centésima de tanto no justifican presentar una opción como claramente mejor.
+
+## 2026-10-06 · Fase 3b: la mesa después del mus
+
+**Política de descarte como distribución.** Para cada posición y mano, una probabilidad por opción: array (4, manos, máx. opciones). Las políticas puras (mejor respuesta) son un caso particular. Las mixtas aparecen al amortiguar la iteración.
+
+**Marginal exacta de cada asiento.** q_s = p0 · M_s, con M_s[h, h'] = Σ_o π_s(o | h) · P(h' | h, o). Es exacta aunque los cuatro roben del mismo mazo: desde el punto de vista de un jugador, lo que roba es un subconjunto uniforme de las 36 cartas que no ve, sea cual sea lo que hayan robado antes los demás. Se verifica con un χ² contra la simulación de la ronda completa en los cuatro asientos.
+
+**Método descartado: reparto uniforme reponderado.** La idea era reutilizar el motor exacto de la Fase 2 reponderando el reparto uniforme con r_s(h) = q_s(h) / p0(h) en cada asiento (para ello, `equity` acepta ahora pesos por asiento, de los que las condiciones son un caso particular). La verificación contra la simulación de la ronda completa lo descartó:
+- Errores de 0,3-0,6 tantos totales por mano.
+- Solo 8 de 84 magnitudes de mesa dentro del IC.
+
+El motivo es estructural. Tras el mus, el juego de los cuatro está *positivamente* correlacionado: todos tiran cartas bajas, que salen del juego, y las manos que quedan se reparten un fondo más rico en figuras. En cambio, un reparto de un único mazo de 40 cartas con 16 figuras lo correlaciona *negativamente*. La prueba está en P(nadie tiene juego):
+
+| Fuente | P(nadie tiene juego) |
+|---|---|
+| Simulación de la ronda | 0,0078 |
+| Manos independientes con las marginales reales | 0,028 |
+| Modelo reponderado | 0,031 |
+
+Ajustar los pesos para cuadrar las marginales no arreglaría el signo de la correlación. Los pesos por asiento se mantienen en `equity`: los necesitará la 3c para condicionar a "este jugador ha dado mus" con políticas mixtas.
+
+**Equity tras el mus por simulación de la ronda completa.** La tabla de equity tras el mus se estima simulando rondas completas (4 millones por vuelta) y agrupando por la mano final de cada asiento, con su error típico. Las manos finales que no salen nunca (probabilidad despreciable) toman el valor de la Fase 2 como respaldo. Verificación contra una simulación independiente (otra semilla, 2 millones de rondas):
+- 84/84 magnitudes de mesa dentro del IC al 99,9 %.
+- Todas las manos frecuentes coinciden mano a mano dentro de su error combinado.
+
+**Valoración de una mano concreta con la ronda simulada** (`valorar_opciones_simuladas`). Para decidir el descarte de una mano dada, se simula la ronda con esa mano fija y se prueban todas las opciones sobre los mismos repartos (números aleatorios comunes). Así se recogen mis propios descartes, que salen del juego, y la conjunta real de los rivales, y la diferencia entre opciones parecidas se estima con un intervalo varias veces más estrecho que el de cada valor por separado. La tabla agrupada por mano final ignora mis descartes: en 10 manos típicas × 2 posiciones la diferencia de valor llega a 0,25 tantos, pero el descarte recomendado coincide en los 20 casos.
+
+**Punto fijo con amortiguación y criterio de explotabilidad.**
+- Se parte de la política de la 3a. En cada vuelta: simulación → tabla → nueva mejor respuesta.
+- Todas las vueltas usan la misma semilla, para que el ruido no haga cambiar decisiones de una vuelta a otra.
+- Si la mejor respuesta vuelve a una política ya vista (un ciclo), se amortigua mezclando con la anterior. El peso de la nueva se reduce a la mitad en cada ciclo, como pidió el usuario.
+- Criterio de parada: **explotabilidad media** < 0,001 tantos por mano. Es lo que ganaría de media un jugador que se desviara de forma óptima, ponderado por la probabilidad de cada mano.
+
+Dos criterios previos fallaron:
+1. **Que la mejor respuesta coincida con la política.** Con decisiones en el filo entre dos opciones casi iguales, el equilibrio es mixto y la iteración oscila sin fin.
+2. **Que la ganancia máxima sea pequeña en todas las manos.** En manos rarísimas (7 4 4 4, P ≈ 0,0002), el valor de tirar las cuatro depende de manos finales que casi no salen en la simulación. Su ruido mantiene una ganancia máxima espuria de ~0,01-0,14 aunque nada relevante cambie.
+
+Resultado: converge en 3 vueltas, con una explotabilidad media de 0,00004. Las tablas de cada vuelta se guardan en caché, así que repetir la iteración es instantáneo.
+
+**Simulador de la ronda completa** (`simular_ronda_mus`): reparto, descarte en orden desde la mano, robo del mazo y los cinco lances en paso, todo vectorizado (~250 000 rondas/s). Comprobaciones:
+- Con la política "quedarse servido" (solo existe con `minimo = 0`), reproduce las probabilidades exactas de la Fase 2.
+- Con cualquier política, reproduce las marginales exactas.
+
+**Sin efecto de selección.** En la 3b todos dan mus siempre. La comparación justa para "¿mejora dar mus?" es:
+- valor tras el mus, con los cuatro descartándose;
+- frente al valor de cortar, con nadie descartándose (equity del reparto inicial).
+
+`descarte --tras-mus` presenta exactamente esa comparación. Con `--n`, la hace simulando la ronda con la mano fija.
+
+**Resultado del caso testigo R R C S de mano** (tantos en paso, sin selección):
+- En la 3a, dar mus mejoraba +0,73.
+- Con los rivales también descartándose, dar mus *empeora* −0,34 [−0,35, −0,32]: cortar es mejor.
+- Siendo postre empeora −1,09.
+
+En general, cuando los rivales también mejoran, el mus vale bastante menos. Solo las manos realmente malas (R C 5 4, R 7 6 4) siguen ganando claramente con él, y al postre le favorece menos que a la mano.

@@ -265,10 +265,18 @@ def evaluar_descartes(
     return valoraciones, _valorar(servida, None, te, posicion, objetivo)
 
 
+UMBRAL_EQUIVALENCIA = 0.005
+"""Diferencia de valor por debajo de la cual dos opciones se consideran
+prácticamente equivalentes, en las unidades del objetivo (tantos o probabilidad).
+Medio punto porcentual o media centésima de tanto no cambian una decisión real."""
+
+
 @dataclass(frozen=True)
 class MejorDescarte:
     """Fila de la tabla de descartes recomendados."""
 
+    indice: int
+    """Índice de la mano en la tabla."""
     mano: str
     posicion: int
     mejor: OpcionDescarte
@@ -278,24 +286,60 @@ class MejorDescarte:
     """Ventaja de la mejor opción sobre la segunda (0 si solo hay una)."""
     valor_servida: float
 
+    def equivalentes(self, umbral: float = UMBRAL_EQUIVALENCIA) -> bool:
+        """True si la segunda opción es prácticamente tan buena como la mejor."""
+        return self.segunda is not None and self.margen < umbral
 
-def mejores_descartes(te: TablaEquity, objetivo: Objetivo = OBJETIVOS["tantos"]
-                      ) -> list[MejorDescarte]:
-    """Descarte recomendado para cada mano y posición."""
+
+def mejores_descartes(te: TablaEquity, objetivo: Objetivo = OBJETIVOS["tantos"],
+                      te_servida: TablaEquity | None = None) -> list[MejorDescarte]:
+    """Descarte recomendado para cada mano y posición.
+
+    ``te_servida`` permite valorar la mano servida con otra tabla (tras el mus,
+    la de cortar es la del reparto inicial, porque nadie se descarta).
+    """
     tabla = te.tabla
     td = construir_tabla_descartes(tabla.reglas)
     filas = []
     for p in (1, 2, 3, 4):
         valores = objetivo.valores(te, p)
+        valores_servida = objetivo.valores(te_servida or te, p)
         for i, mano in enumerate(tabla.manos):
             v = td.transicion[i] @ valores
             orden = np.argsort(-v, kind="stable")
             segunda = td.opciones[i][orden[1]] if len(orden) > 1 else None
             filas.append(MejorDescarte(
-                mano.texto(tabla.baraja), p, td.opciones[i][orden[0]], float(v[orden[0]]),
+                i, mano.texto(tabla.baraja), p, td.opciones[i][orden[0]], float(v[orden[0]]),
                 segunda, float(v[orden[0]] - v[orden[1]]) if len(orden) > 1 else 0.0,
-                float(valores[i])))
+                float(valores_servida[i])))
     return filas
+
+
+@dataclass(frozen=True)
+class CartasPedidas:
+    """Cuántas cartas se piden con una política, por posición."""
+
+    posicion: int
+    manos: dict[int, int]
+    """Número de manos distintas que piden k cartas (sin ponderar)."""
+    repartos: dict[int, float]
+    """Proporción de repartos en que se piden k cartas (ponderada por la
+    probabilidad de cada mano): es lo que se vería en la mesa."""
+
+
+def cartas_pedidas(filas: list[MejorDescarte], tabla: TablaManos) -> list[CartasPedidas]:
+    """Distribución de cartas pedidas por posición, sin ponderar y ponderada."""
+    resultado = []
+    for p in sorted({f.posicion for f in filas}):
+        manos = {k: 0 for k in range(1, CARTAS_POR_MANO + 1)}
+        repartos = {k: 0.0 for k in manos}
+        for f in filas:
+            if f.posicion == p:
+                manos[f.mejor.n_descartes] = manos.get(f.mejor.n_descartes, 0) + 1
+                repartos[f.mejor.n_descartes] = (repartos.get(f.mejor.n_descartes, 0.0)
+                                                 + float(tabla.probabilidad[f.indice]))
+        resultado.append(CartasPedidas(p, manos, repartos))
+    return resultado
 
 
 # --- Verificación Monte Carlo ------------------------------------------------

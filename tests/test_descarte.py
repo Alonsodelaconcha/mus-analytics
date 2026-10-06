@@ -12,6 +12,7 @@ from mus.cartas import Mano
 from mus.cartas import parsear_mano as pm
 from mus.descarte import (
     OBJETIVOS,
+    cartas_pedidas,
     construir_tabla_descartes,
     distribucion_tras_descarte,
     evaluar_descartes,
@@ -186,12 +187,45 @@ def test_mejores_descartes_tabla_sintetica():
     assert fila.valor == pytest.approx(max(v.p_juego for v in evaluar_descartes("R C 5 4", 1, te)[0]))
 
 
+def test_cartas_pedidas_ponderadas():
+    te = tabla_equity_sintetica(TABLA.tiene_juego.astype(float))
+    for c in cartas_pedidas(mejores_descartes(te), TABLA):
+        assert sum(c.manos.values()) == 330
+        assert sum(c.repartos.values()) == pytest.approx(1)
+        # ponderar cambia las proporciones: no es lo mismo que contar manos distintas
+        assert any(abs(c.repartos[k] - c.manos[k] / 330) > 0.01 for k in c.manos)
+
+
+def test_opciones_practicamente_equivalentes():
+    constante = tabla_equity_sintetica(np.zeros(TABLA.n_manos))
+    fila = next(f for f in mejores_descartes(constante) if f.mano == "R C 5 4")
+    assert fila.margen == 0 and fila.equivalentes()
+    juego = tabla_equity_sintetica(TABLA.tiene_juego.astype(float))
+    fila = next(f for f in mejores_descartes(juego) if f.mano == "R C S A")
+    assert not fila.equivalentes()
+    assert fila.equivalentes(umbral=1.0)
+
+
 class TestCLI:
     @pytest.fixture(autouse=True)
     def tabla_rapida(self, monkeypatch):
         import mus.__main__ as cli
         te = tabla_equity_sintetica(TABLA.tiene_juego.astype(float))
         monkeypatch.setattr(cli, "cargar_tabla_equity", lambda reglas: te)
+
+    def test_marca_las_equivalentes(self, capsys, monkeypatch):
+        import mus.__main__ as cli
+        constante = tabla_equity_sintetica(np.zeros(TABLA.n_manos))
+        monkeypatch.setattr(cli, "cargar_tabla_equity", lambda reglas: constante)
+        assert main(["descarte", "R C 5 4"]) == 0
+        salida = capsys.readouterr().out
+        assert "Prácticamente equivalentes" in salida and "≈1" in salida
+        assert "Recomendación:" not in salida
+
+    def test_tabla_muestra_cartas_ponderadas(self, tmp_path, capsys):
+        assert main(["descarte-tabla", "--csv", str(tmp_path / "d.csv")]) == 0
+        salida = capsys.readouterr().out
+        assert "% de repartos" in salida and "manos distintas" in salida
 
     def test_descarte(self, capsys):
         assert main(["descarte", "R C S A", "--posicion", "2", "--n", "5000", "--semilla", "1"]) == 0

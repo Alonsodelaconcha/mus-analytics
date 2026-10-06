@@ -50,7 +50,28 @@ python -m mus descarte "A A 4 5" --pesos "chica=2,punto=0"
 python -m mus descarte-tabla --objetivo tantos --csv resultados/descartes_tantos.csv
 ```
 
-Objetivos: `tantos` (tantos netos en paso, por defecto), `grande`, `chica`, `pares` y `juego` (P de ganar yo ese lance). Con `--pesos` se ponderan los tantos de cada lance. La valoración usa la equity del reparto inicial: los rivales aún no se han descartado (eso llega con la Fase 3b).
+Objetivos: `tantos` (tantos netos en paso, por defecto), `grande`, `chica`, `pares` y `juego` (P de ganar yo ese lance). Con `--pesos` se ponderan los tantos de cada lance. Las opciones que difieren menos de `--umbral` (0,005 por defecto) se marcan como prácticamente equivalentes (≈).
+
+Por defecto, la valoración usa la equity del reparto inicial. Con `--tras-mus` se valora contra la mesa tras el mus (los rivales también se descartan), y la mano servida se compara con la equity de cortar.
+
+### Mesa tras el mus (Fase 3b)
+
+```bash
+python -m mus tras-mus
+python -m mus tras-mus --verificar 2000000 --semilla 1
+python -m mus descarte "R R C S" --posicion 1 --tras-mus
+python -m mus descarte "R R C S" --posicion 1 --tras-mus --n 400000 --semilla 7
+python -m mus descarte-tabla --tras-mus --csv resultados/descartes_tras_mus.csv
+```
+
+`tras-mus` itera la política de descarte de los cuatro jugadores y la equity tras el mus, que se estima simulando rondas completas, hasta un punto fijo. La primera vez simula unas pocas vueltas (~1 min en total), que quedan en `resultados/cache/`. Muestra:
+- cómo cambia la distribución de manos tras el mus;
+- cuántas cartas se piden;
+- las probabilidades de mesa antes y después del mus.
+
+Con `--verificar N` compara la mesa con N rondas simuladas de forma independiente.
+
+`descarte --tras-mus --n N` valora cada opción simulando la ronda con esa mano fija (sobre los mismos repartos para todas las opciones) y la compara con cortar.
 
 ## Tests
 
@@ -73,5 +94,6 @@ El primero ejecuta los tests rápidos (~10 s). El segundo, las verificaciones co
 - `src/mus/condiciones.py`: condiciones sobre la mano de otro jugador (información del compañero o de los rivales).
 - `src/mus/equity.py`: equity exacta por mano, posición y lance (individual y pareja), tantos netos en paso y verificación Monte Carlo.
 - `src/mus/descarte.py`: formas de descartarse, distribución exacta de la mano resultante y descarte recomendado según el objetivo.
+- `src/mus/tras_mus.py`: políticas de descarte, distribución de la mesa tras el mus, iteración hasta el punto fijo y simulador de la ronda completa.
 - `src/mus/analisis.py`: distribuciones exactas, verificación, rankings y exportación (CSV, JSON y gráficas).
 - `docs/decisiones.md`: decisiones de diseño y sus motivos.

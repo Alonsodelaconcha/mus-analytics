@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from mus.cartas import Baraja
-from mus.descarte import MejorDescarte, Objetivo, texto_conteos
+from mus.descarte import UMBRAL_EQUIVALENCIA, MejorDescarte, Objetivo, texto_conteos
 from mus.equity import POSICIONES, EquityLance, EquityMano, TablaEquity
 from mus.evaluacion import Lance, Pares
 from mus.simulacion import Estimacion, generador, muestrear_manos
@@ -237,42 +237,47 @@ def exportar_rankings_csv(te: TablaEquity, ruta: str | Path) -> Path:
     return ruta
 
 
-def probabilidades_mesa(te: TablaEquity) -> dict[str, float]:
-    """Probabilidades de mesa, exactas, promediando la tabla de equity.
+def probabilidades_mesa(te: TablaEquity, marginales: np.ndarray | None = None
+                        ) -> dict[str, float]:
+    """Probabilidades de mesa promediando la tabla de equity.
 
-    P(el jugador en la posición p gana) = Σ_manos P(mano)·P(gana | mano, p).
+    P(el jugador en la posición p gana) = Σ_manos P(mano en p)·P(gana | mano, p).
+    Por defecto P(mano en p) es la del reparto inicial (y el resultado es
+    exacto); con ``marginales`` (4, manos) se usa la de cada asiento, p. ej.
+    tras el mus. Lo de la pareja 1-3 se calcula desde el asiento 1.
     """
-    prob = te.tabla.probabilidad[:, None]
+    if marginales is None:
+        marginales = np.broadcast_to(te.tabla.probabilidad, (len(POSICIONES), te.tabla.n_manos))
+    q1 = marginales[0]
     resultado: dict[str, float] = {}
     for l, lance in enumerate(Lance):
-        se_juega = float((prob[:, 0] * te.se_juega[:, 0, l]).sum())
-        resultado[f"{lance.value}: se juega"] = se_juega
+        resultado[f"{lance.value}: se juega"] = float(q1 @ te.se_juega[:, 0, l])
         for p in POSICIONES:
             resultado[f"{lance.value}: gana el jugador {p}"] = float(
-                (prob[:, 0] * te.gana_individual[:, p - 1, l]).sum())
-        resultado[f"{lance.value}: gana la pareja 1-3"] = float(
-            (prob[:, 0] * te.gana_pareja[:, 0, l]).sum())
+                marginales[p - 1] @ te.gana_individual[:, p - 1, l])
+        resultado[f"{lance.value}: gana la pareja 1-3"] = float(q1 @ te.gana_pareja[:, 0, l])
         resultado[f"{lance.value}: tantos netos pareja 1-3"] = float(
-            (prob[:, 0] * te.tantos_netos[:, 0, l]).sum())
-    resultado["total: tantos netos pareja 1-3"] = float(
-        (prob[:, 0] * te.tantos_netos[:, 0, :].sum(axis=1)).sum())
+            q1 @ te.tantos_netos[:, 0, l])
+    resultado["total: tantos netos pareja 1-3"] = float(q1 @ te.tantos_netos[:, 0, :].sum(axis=1))
     return resultado
 
 
 def exportar_descartes_csv(filas: list[MejorDescarte], baraja: Baraja, objetivo: Objetivo,
-                           ruta: str | Path) -> Path:
+                           ruta: str | Path, umbral: float = UMBRAL_EQUIVALENCIA) -> Path:
     """Exporta la tabla de descartes recomendados (una fila por mano y posición)."""
     ruta = _preparar(ruta)
     with ruta.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["mano", "posicion", "objetivo", "me_quedo", "tiro", "cartas_pedidas",
-                    "valor", "segunda_opcion", "margen", "valor_servida"])
+                    "valor", "segunda_opcion", "margen", "practicamente_equivalentes",
+                    "valor_servida"])
         for r in filas:
             segunda = r.segunda.texto(baraja) if r.segunda else ""
             w.writerow([r.mano, r.posicion, objetivo.nombre,
                         texto_conteos(r.mejor.conservadas, baraja),
                         texto_conteos(r.mejor.descartadas, baraja), r.mejor.n_descartes,
-                        f"{r.valor:.6f}", segunda, f"{r.margen:.6f}", f"{r.valor_servida:.6f}"])
+                        f"{r.valor:.6f}", segunda, f"{r.margen:.6f}",
+                        "si" if r.equivalentes(umbral) else "no", f"{r.valor_servida:.6f}"])
     return ruta
 
 
