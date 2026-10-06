@@ -67,7 +67,7 @@ from mus.simulacion import (
     generador,
     tantos_lance,
 )
-from mus.tablas import potencias_codigo
+from mus.tablas import TablaManos, potencias_codigo
 
 LANCES = tuple(Lance)
 TOLERANCIA_EXPLOTABILIDAD = 0.001
@@ -259,52 +259,88 @@ class SimulacionMesa:
     cartas_pedidas: np.ndarray         # (4, 5) veces que se piden k = 0..4 cartas
 
 
-def simular_ronda_mus(politica: Politica, n: int, semilla: int | None = None,
-                      tamano_lote: int = TAMANO_LOTE) -> SimulacionMesa:
-    """Simula ``n`` manos completas: reparto, mus con la política y lances en paso.
+def _repartir_y_descartar(politica: Politica, m: int, rng: np.random.Generator
+                          ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Reparte ``m`` manos completas y aplica la ronda de mus con la política.
 
-    Se descartan los cuatro en orden desde la mano y roban del mazo en ese
-    mismo orden. En la primera ronda el mazo no se agota (se piden como mucho
-    16 cartas y quedan 24).
+    Returns:
+        (iniciales, finales, pedidas): arrays (m, 4) con las manos iniciales, las
+        finales y las cartas que pide cada asiento. Se descartan y roban en
+        orden desde la mano; en la primera ronda el mazo no se agota (se piden
+        como mucho 16 cartas y quedan 24).
     """
     td = politica.td
     tabla = td.tabla
     op = _opciones_densas(td)
-    rng = generador(semilla)
     potencias = potencias_codigo(tabla.baraja)
     mazo = np.array(tabla.baraja.cartas(), dtype=np.int8)
-    nm, nl = tabla.n_manos, len(LANCES)
-    acum = {k: np.zeros((JUGADORES, nm, nl)) for k in
-            ("gana_individual", "gana_pareja", "se_juega", "tantos", "tantos_cuadrado")}
-    frecuencias = np.zeros((JUGADORES, nm))
-    total = np.zeros((JUGADORES, nm))
-    total_cuadrado = np.zeros((JUGADORES, nm))
-    pedidas = np.zeros((JUGADORES, CARTAS_POR_MANO + 1), dtype=np.int64)
     acumuladas = np.cumsum(politica.probabilidades, axis=2)
+    filas = np.arange(m)
+    barajado = rng.permuted(np.tile(mazo, (m, 1)), axis=1)
+    iniciales = tabla.indices_de_codigos(
+        potencias[barajado[:, :16]].reshape(m, JUGADORES, CARTAS_POR_MANO).sum(axis=2))
+    # Código acumulado de las cartas del mazo, para sacar lo que roba cada uno.
+    robo = np.zeros((m, 25), dtype=np.int64)
+    np.cumsum(potencias[barajado[:, 16:]], axis=1, out=robo[:, 1:])
+    inicio = np.zeros(m, dtype=np.int64)
+    finales = np.empty((m, JUGADORES), dtype=np.int64)
+    pedidas = np.empty((m, JUGADORES), dtype=np.int64)
+    for s in range(JUGADORES):
+        h = iniciales[:, s]
+        opcion = _elegir(acumuladas[s], op.valida, h, rng.random(m))
+        k = op.n_descartes[h, opcion]
+        robado = robo[filas, inicio + k] - robo[filas, inicio]
+        finales[:, s] = tabla.indices_de_codigos(op.codigo_conservadas[h, opcion] + robado)
+        pedidas[:, s] = k
+        inicio += k
+    return iniciales, finales, pedidas
 
-    hechos = 0
-    while hechos < n:
-        m = min(tamano_lote, n - hechos)
-        hechos += m
-        filas = np.arange(m)
-        barajado = rng.permuted(np.tile(mazo, (m, 1)), axis=1)
-        iniciales = tabla.indices_de_codigos(
-            potencias[barajado[:, :16]].reshape(m, JUGADORES, CARTAS_POR_MANO).sum(axis=2))
-        # Código acumulado de las cartas del mazo, para sacar lo que roba cada uno.
-        robo = np.zeros((m, 25), dtype=np.int64)
-        np.cumsum(potencias[barajado[:, 16:]], axis=1, out=robo[:, 1:])
-        inicio = np.zeros(m, dtype=np.int64)
-        finales = np.empty((m, JUGADORES), dtype=np.int64)
+
+def tantos_netos_por_asiento(tabla: TablaManos, manos: np.ndarray,
+                             pesos_lance: tuple[float, ...] | None = None) -> np.ndarray:
+    """(m, 4) tantos netos en paso de la pareja de cada asiento, sumando los lances
+    (ponderados por ``pesos_lance`` si se dan)."""
+    neto = np.zeros(manos.shape)
+    for l, lance in enumerate(LANCES):
+        peso = 1.0 if pesos_lance is None else pesos_lance[l]
+        if peso == 0:
+            continue
+        g = ganadores_lance(tabla, manos, lance)
+        t = tantos_lance(tabla, manos, lance, g)
         for s in range(JUGADORES):
-            h = iniciales[:, s]
-            opcion = _elegir(acumuladas[s], op.valida, h, rng.random(m))
-            k = op.n_descartes[h, opcion]
-            robado = robo[filas, inicio + k] - robo[filas, inicio]
-            finales[:, s] = tabla.indices_de_codigos(op.codigo_conservadas[h, opcion] + robado)
-            inicio += k
-            pedidas[s] += np.bincount(k, minlength=CARTAS_POR_MANO + 1)
+            mia = (g > 0) & ((g % 2 == 1) == (s % 2 == 0))
+            neto[:, s] += peso * np.where(mia, t, np.where(g > 0, -t, 0))
+    return neto
 
+
+class _Acumulador:
+    """Acumula, por asiento y mano final, los resultados de los lances (con pesos)."""
+
+    def __init__(self, tabla: TablaManos):
+        self.tabla = tabla
+        nm, nl = tabla.n_manos, len(LANCES)
+        self.n = 0
+        self.lances = {k: np.zeros((JUGADORES, nm, nl)) for k in
+                       ("gana_individual", "gana_pareja", "se_juega", "tantos", "tantos_cuadrado")}
+        self.frecuencias = np.zeros((JUGADORES, nm))
+        self.total = np.zeros((JUGADORES, nm))
+        self.total_cuadrado = np.zeros((JUGADORES, nm))
+        self.pedidas = np.zeros((JUGADORES, CARTAS_POR_MANO + 1))
+
+    def sumar(self, finales: np.ndarray, pedidas: np.ndarray, pesos: np.ndarray | None = None,
+              pesos_lance: tuple[float, ...] | None = None) -> np.ndarray:
+        """Añade un lote de repartos (con un peso por reparto).
+
+        Devuelve los tantos netos de cada asiento (m, 4), sumando los lances
+        ponderados por ``pesos_lance`` (o sin ponderar si no se dan); la tabla
+        acumulada guarda siempre los tantos sin ponderar.
+        """
+        tabla, nm = self.tabla, self.tabla.n_manos
+        m = len(finales)
+        w = np.ones(m) if pesos is None else pesos
+        self.n += m
         neto_total = np.zeros((m, JUGADORES))
+        neto_objetivo = np.zeros((m, JUGADORES))
         for l, lance in enumerate(LANCES):
             g = ganadores_lance(tabla, finales, lance)
             t = tantos_lance(tabla, finales, lance, g)
@@ -312,21 +348,42 @@ def simular_ronda_mus(politica: Politica, n: int, semilla: int | None = None,
                 mia = (g > 0) & ((g % 2 == 1) == (s % 2 == 0))
                 neto = np.where(mia, t, np.where(g > 0, -t, 0)).astype(np.float64)
                 neto_total[:, s] += neto
+                neto_objetivo[:, s] += neto * (1.0 if pesos_lance is None else pesos_lance[l])
                 f = finales[:, s]
                 for clave, valores in (("gana_individual", g == s + 1), ("gana_pareja", mia),
                                        ("se_juega", g > 0), ("tantos", neto),
                                        ("tantos_cuadrado", neto * neto)):
-                    acum[clave][s, :, l] += np.bincount(f, weights=valores.astype(np.float64),
-                                                        minlength=nm)
+                    self.lances[clave][s, :, l] += np.bincount(f, weights=valores * w,
+                                                               minlength=nm)
         for s in range(JUGADORES):
             f = finales[:, s]
-            frecuencias[s] += np.bincount(f, minlength=nm)
-            total[s] += np.bincount(f, weights=neto_total[:, s], minlength=nm)
-            total_cuadrado[s] += np.bincount(f, weights=neto_total[:, s] ** 2, minlength=nm)
+            self.frecuencias[s] += np.bincount(f, weights=w, minlength=nm)
+            self.total[s] += np.bincount(f, weights=neto_total[:, s] * w, minlength=nm)
+            self.total_cuadrado[s] += np.bincount(f, weights=neto_total[:, s] ** 2 * w,
+                                                  minlength=nm)
+            self.pedidas[s] += np.bincount(pedidas[:, s], weights=w,
+                                           minlength=CARTAS_POR_MANO + 1)
+        return neto_objetivo
 
-    return SimulacionMesa(n, frecuencias, acum["gana_individual"], acum["gana_pareja"],
-                          acum["se_juega"], acum["tantos"], acum["tantos_cuadrado"],
-                          total, total_cuadrado, pedidas)
+    def resultado(self) -> SimulacionMesa:
+        l = self.lances
+        return SimulacionMesa(self.n, self.frecuencias, l["gana_individual"], l["gana_pareja"],
+                              l["se_juega"], l["tantos"], l["tantos_cuadrado"], self.total,
+                              self.total_cuadrado, self.pedidas)
+
+
+def simular_ronda_mus(politica: Politica, n: int, semilla: int | None = None,
+                      tamano_lote: int = TAMANO_LOTE) -> SimulacionMesa:
+    """Simula ``n`` manos completas: reparto, mus con la política y lances en paso."""
+    rng = generador(semilla)
+    acumulador = _Acumulador(politica.td.tabla)
+    hechos = 0
+    while hechos < n:
+        m = min(tamano_lote, n - hechos)
+        hechos += m
+        _, finales, pedidas = _repartir_y_descartar(politica, m, rng)
+        acumulador.sumar(finales, pedidas)
+    return acumulador.resultado()
 
 
 @dataclass(frozen=True, eq=False)

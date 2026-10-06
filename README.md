@@ -73,6 +73,19 @@ Con `--verificar N` compara la mesa con N rondas simuladas de forma independient
 
 `descarte --tras-mus --n N` valora cada opción simulando la ronda con esa mano fija (sobre los mismos repartos para todas las opciones) y la compara con cortar.
 
+### Cortar o dar mus (Fase 3c)
+
+```bash
+python -m mus cortar "R R C S" --posicion 1
+python -m mus cortar "A A 4 5" --posicion 4 --companero "sin_pares, sin_juego, reyes<=1"
+python -m mus cortar "R C 5 4" --posicion 1 --factor-corte 0.5
+python -m mus corte-mesa --csv resultados/corte.csv
+python -m mus corte-mesa --escenario equilibrio
+python -m mus testigos
+```
+
+Por defecto, los rivales son "razonables": cortan si les conviene suponiendo que todos dan mus. Con `--factor-corte` se escala cuánto cortan (0 = nadie corta). `--escenario equilibrio` usa el punto fijo de corte y descarte; en este modelo, en paso, casi nunca hay mus. `testigos` compara los casos testigo del usuario (`docs/casos_testigo.md`) con el modelo en los dos escenarios.
+
 ## Tests
 
 ```bash
@@ -95,5 +108,7 @@ El primero ejecuta los tests rápidos (~10 s). El segundo, las verificaciones co
 - `src/mus/equity.py`: equity exacta por mano, posición y lance (individual y pareja), tantos netos en paso y verificación Monte Carlo.
 - `src/mus/descarte.py`: formas de descartarse, distribución exacta de la mano resultante y descarte recomendado según el objetivo.
 - `src/mus/tras_mus.py`: políticas de descarte, distribución de la mesa tras el mus, iteración hasta el punto fijo y simulador de la ronda completa.
+- `src/mus/cortar.py`: cortar o dar mus con el efecto de selección (equilibrio y rivales razonables).
+- `src/mus/testigos.py`: casos testigo del usuario como datos, para validar.
 - `src/mus/analisis.py`: distribuciones exactas, verificación, rankings y exportación (CSV, JSON y gráficas).
 - `docs/decisiones.md`: decisiones de diseño y sus motivos.

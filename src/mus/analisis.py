@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from mus.cartas import Baraja
+from mus.cortar import MesaConCorte
 from mus.descarte import UMBRAL_EQUIVALENCIA, MejorDescarte, Objetivo, texto_conteos
 from mus.equity import POSICIONES, EquityLance, EquityMano, TablaEquity
 from mus.evaluacion import Lance, Pares
@@ -278,6 +279,27 @@ def exportar_descartes_csv(filas: list[MejorDescarte], baraja: Baraja, objetivo:
                         texto_conteos(r.mejor.descartadas, baraja), r.mejor.n_descartes,
                         f"{r.valor:.6f}", segunda, f"{r.margen:.6f}",
                         "si" if r.equivalentes(umbral) else "no", f"{r.valor_servida:.6f}"])
+    return ruta
+
+
+def exportar_corte_csv(mesa: MesaConCorte, ruta: str | Path) -> Path:
+    """Por mano y posición: política de corte, frecuencia con que se decide con esa
+    mano, valor de cortar y ventaja de dar mus (con sus errores típicos)."""
+    ruta = _preparar(ruta)
+    tabla = mesa.tabla_inicial.tabla
+    sim = mesa.simulacion
+    cortar, e_cortar = sim.valor_cortar()
+    ventaja, e_ventaja = sim.ventaja_mus()
+    with ruta.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["posicion", "mano", "p_cortar", "p_decidir_con_esta_mano", "valor_cortar",
+                    "error_cortar", "ventaja_mus", "error_ventaja"])
+        for p in POSICIONES:
+            for i, mano in enumerate(tabla.manos):
+                w.writerow([p, mano.texto(tabla.baraja), f"{mesa.corte.probabilidades[p - 1, i]:.4f}",
+                            f"{sim.alcance[p - 1, i] / sim.n:.8f}", f"{cortar[p - 1, i]:.4f}",
+                            f"{e_cortar[p - 1, i]:.4f}", f"{ventaja[p - 1, i]:.4f}",
+                            f"{e_ventaja[p - 1, i]:.4f}"])
     return ruta
 
 

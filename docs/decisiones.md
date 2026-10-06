@@ -169,3 +169,61 @@ Resultado: converge en 3 vueltas, con una explotabilidad media de 0,00004. Las t
 **Limitación conocida (anotada a petición del usuario): coordinación de pareja.** El modelo decide cortar o dar mus mano a mano, sin comunicación con el compañero. Un jugador real puede dar mus con una mano dudosa para que hable el compañero, o preguntarle con señas antes de decidir. Es una mejora futura. En la 3c se aproxima solo en el caso testigo de A A 4 5 de postre, condicionando a dos tipos de mano del compañero.
 
 En general, cuando los rivales también mejoran, el mus vale bastante menos. Solo las manos realmente malas (R C 5 4, R 7 6 4) siguen ganando claramente con él, y al postre le favorece menos que a la mano.
+
+## 2026-10-07 · Fase 3c: cortar o dar mus
+
+**Casos testigo registrados antes de calcular** (`docs/casos_testigo.md`, commit propio). Solo sirven para validar; no se ha ajustado nada del modelo con ellos.
+
+**Modelo.** Una política de corte κ_s(h) da la probabilidad de que el asiento s corte con la mano h si le toca hablar. En paso, los tantos solo dependen de las cartas, así que, para el asiento s (los anteriores han dado mus):
+- cortar vale T_ini (los lances con las manos iniciales);
+- dar mus vale w·T_mus + (1 − w)·T_ini, con w = Π_{k>s} (1 − κ_k) la probabilidad de que den mus todos los que hablan después. Si alguno corta, se juega con las manos iniciales, corte quien corte.
+
+Simplificaciones: una sola ronda de mus, tantos en paso y sin comunicación entre compañeros.
+
+**Efecto de selección con pesos de importancia.** En una misma simulación, para cada asiento y mano inicial se acumulan:
+- el alcance, Π_{k<s} (1 − κ_k): la probabilidad de que los anteriores hayan dado mus;
+- el valor de cortar;
+- la ventaja del mus, w·(T_mus − T_ini).
+
+La tabla de equity tras el mus se pondera por P(dan mus los cuatro). Usar pesos en vez de descartar repartos aprovecha todas las muestras. Los errores típicos usan el tamaño efectivo de Kish, (Σw)²/Σw².
+
+**Verificación exacta del efecto de selección.** El valor de cortar es la equity del reparto inicial sabiendo que los anteriores dieron mus, y eso lo calcula exactamente el motor de la Fase 2 con pesos por asiento (1 − κ). Con una política de prueba ("cortar con juego"), la simulación coincide con el exacto en 9 de 9 combinaciones (|z| < 1,7), y hay un test que lo comprueba.
+
+**El equilibrio del modelo es degenerado.** La iteración conjunta de corte y descarte se hizo con amortiguación 1/(t + 1) (*fictitious play*), porque sin ella oscilaba sin control. Converge a una mesa en la que casi nunca hay mus: P(hay mus) baja a ~1 % y sigue bajando, y la explotabilidad cae a la par. La causa:
+- La ronda de mus da de media +0,28 tantos a la pareja de la mano (tras el mus casi siempre se juega el juego, y la mano gana los empates).
+- La pareja 2-4 prefiere, por tanto, que no haya mus.
+- Dar mus revela debilidad, y quien habla después lo explota cortando.
+- En cuanto el postre corta casi siempre, las decisiones de los demás dejan de importar.
+
+Nada del modelo frena esa espiral: en paso no hay envites que hagan valer más las jugadas que da el mus, ni marcador, ni coste de información al cortar. Es una limitación del modelo, que tiene su peso para la Fase 6.
+
+**Escenario principal: rivales razonables (nivel 1).** Cada rival corta si, suponiendo que todos los demás dan mus, cortar le sale mejor, y se descarta con el equilibrio de la 3b. El jugador que decide responde de forma óptima a esos rivales, con el efecto de selección completo. Así razona un jugador que no anticipa que los demás también cortan. Resultado: P(hay mus) = 11,5 %. Los dos escenarios se muestran siempre juntos. La elección del principal se debe a que P(mus) → 0 no se parece a la mesa real, no a los casos testigo, que se calcularon después.
+
+**Explotabilidad consciente del ruido.** En la 3c, la explotabilidad se mide **por reparto**: cada ganancia por desviarse se pondera por la probabilidad de llegar a esa decisión (hablar, o que haya mus). En el corte solo cuentan las ganancias estadísticamente significativas (|ventaja| > 2 errores típicos). En manos casi indiferentes, el signo de la ventaja es ruido de la simulación y daría ganancias ficticias. Tras 40 vueltas, la explotabilidad del corte es de 0,0033 tantos por reparto y la del descarte, < 0,0001.
+
+**Sensibilidad a cuánto cortan los rivales.** Las decisiones dudosas dependen de la frecuencia de mus en la mesa, que el modelo no puede fijar por sí solo, porque el equilibrio es degenerado. Por eso se añade `--factor-corte λ`, que escala la probabilidad de corte de los rivales razonables. Ventaja de dar mus (en tantos):
+
+| λ | P(hay mus) | R C 5 4 mano | R C 5 4 postre | A A 4 5 mano | A A 4 5 postre | A A 4 5 postre, compañero flojo | R R C S mano |
+|---|---|---|---|---|---|---|---|
+| 0 (nadie corta) | 1,00 | +1,46 | +0,63 | −0,31 | −0,26 | +1,10 | −0,33 |
+| 0,5 | 0,40 | +0,47 | +0,28 | −0,27 | −0,47 | +0,61 | −0,33 |
+| 0,75 | 0,23 | +0,15 | +0,09 | −0,25 | −0,54 | +0,27 | −0,31 |
+| 1 (razonables) | 0,11 | −0,06 | −0,08 | −0,22 | −0,48 | −0,19 | −0,27 |
+
+**Mecanismo.** Cuando los rivales cortan con sus buenas manos, el mus solo llega a producirse si ellos van flojos. En esos repartos, el mus les ayuda más a ellos que a mí, y jugar ya con las manos iniciales me favorece.
+
+**Validación con los casos testigo** (`mus testigos`, 300 000 repartos por caso, IC 95 %):
+- **12 de 12 "corto" coinciden** en los dos escenarios y con margen amplio: R R C S, R C S A, R R R A, R R A A, C S 6 5 y 7 7 7 S, de mano y de postre. De mano, la ventaja de cortar va de 0,27 a 0,60 tantos; de postre, de 1,7 a 4,0.
+- **R C 5 4 (mano y postre): el usuario da mus; el modelo, con λ = 1, corta**, por −0,06 y −0,11 tantos por mano. La decisión cambia en λ ≈ 0,9 (P(hay mus) ≈ 15 %). Con mesas en las que el mus sea más frecuente, la del usuario es mejor, y por mucho (+1,46 si nadie corta). Valoración: la discrepancia viene del supuesto sobre los rivales, no de un error claro de ninguno de los dos. El modelo con λ = 1 probablemente infravalora la frecuencia de mus real.
+- **Descarte de R C 5 4: el usuario se queda R, el modelo R C.** Pierde 0,05-0,10 tantos por mano en paso. Quedarse R es el mejor descarte si el objetivo es pares (3a, `--objetivo pares`). En paso los pares valen poco frente al juego, al que también ayuda el caballo, y con envites esa diferencia podría cambiar.
+- **A A 4 5 de mano: el usuario duda y daría mus para que hable el compañero; el modelo corta** en todo el rango de λ (−0,21 a −0,31). Dar mus sin coordinación cuesta unos 0,2 tantos por mano. La razón del usuario (la coordinación de pareja) queda fuera del modelo. El caso de postre muestra que esa información vale mucho.
+- **A A 4 5 de postre:**
+  - sin información, cortar (−0,45);
+  - con el compañero **"va bien"**, cortar (−1,23), igual que el usuario;
+  - con el compañero **"flojo"**, el usuario daría mus. El modelo da mus mientras λ ≤ 0,75 (+0,27 a +1,10) y corta con λ = 1 (−0,19).
+
+  Preguntar al compañero es justo lo que hace cambiar la decisión: es la limitación de coordinación anotada, y su valor queda medido.
+
+Definiciones usadas para preguntar al compañero, sobre su mano inicial:
+- "va bien": medias o duples, 31, o al menos dos reyes;
+- "flojo": sin pares, sin juego y como mucho un rey.
