@@ -129,6 +129,22 @@ Las decisiones dudosas de cortar o dar mus dependen de cuánto se corta en la me
 
 Con las primeras 45 manos reales (sin contar la primera de cada partida, que se juega con mus corrido y sin señas), hubo mus en el 29 %: λ ≈ 0,65. El corte por posición encaja con el modelo (χ² con p = 0,90), y la pareja segundo-postre corta 1,8 veces más que la de la mano, frente a 1,6 que predecía el modelo.
 
+## Web (en construcción)
+
+La web para el móvil está en `web/` (React + TypeScript + Vite). Su núcleo en TypeScript traduce la parte del motor que se calcula en el navegador, y sus tests la comparan con ficheros de referencia exportados por Python, sin ninguna tolerancia. Requiere Node 22 o superior:
+
+```bash
+cd web
+```
+```bash
+npm ci
+```
+```bash
+npm run verificar
+```
+
+`npm run dev` la abre en el navegador; `npm run build` la construye en `web/dist`. Los datos que consulta los genera `python -m mus exportar-web`.
+
 ## Tests
 
 ```bash

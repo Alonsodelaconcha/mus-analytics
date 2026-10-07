@@ -388,3 +388,53 @@ Las dos limitaciones se explicarán claramente en la web:
 - En el modelo, la razón es ~1,6 para cualquier λ. λ escala por igual el corte de los cuatro asientos, así que la estructura entre posiciones viene de los rivales razonables, no de λ.
 
 **Herramientas.** `calibracion.leer_cortes`, `comparar_cortes` (binomial exacto por posición, χ² global con su cola exacta para grados pares y razón entre parejas por el método delta) y `cortes_del_modelo`. `python -m mus calibrar` lo muestra si existe el fichero y avisa si no cuadra con `mus_real.csv`.
+
+## 2026-10-08 · Fase 4, paso 2: núcleo en TypeScript
+
+**Qué se porta y qué no.** En el navegador se calcula solo lo exacto y barato:
+- leer una mano escrita;
+- evaluar cada lance (claves, fuerza densa de las 330 manos, resolución de un lance entre cuatro);
+- las opciones de descarte;
+- la distribución exacta de la mano final.
+
+Lo pesado (equity, simulaciones de la mesa) llega precalculado. El núcleo también lee los datos exportados y busca la tabla que corresponde a las señas marcadas. Está en `web/src/nucleo` (`cartas`, `evaluacion`, `tablas`, `descarte`, `senas`, `datos`), con los mismos nombres que en Python.
+
+**Tecnología.**
+
+| Pieza | Elección y motivo |
+|---|---|
+| Proyecto | Vite 8 + React 19, creado a mano en vez de con la plantilla, para controlar exactamente qué lleva. |
+| TypeScript | **6.0, no 7.** TypeScript 7 es la reescritura nativa en Go y acaba de salir: `typescript-eslint` todavía no la admite (exige < 6.1). Cuando la admita, el cambio es una línea. |
+| Comprobación de tipos | `strict`, `noUncheckedIndexedAccess` (acceder a un array puede dar `undefined`) y `exactOptionalPropertyTypes`. |
+| Configuración | Referencias de proyecto, como la plantilla oficial de Vite: `src` se comprueba solo con los tipos del navegador, y los tests con los de Node. |
+| Lint y tests | ESLint 10 con `strictTypeChecked` y las reglas de los hooks de React; Vitest 5. |
+
+`npm run verificar` = tipos + lint + tests.
+
+**Exactitud: se compara sin tolerancia.** Toda la aritmética del núcleo es entera. Los numeradores de la distribución tras el descarte son < C(36, 4) = 58 905, y las huellas, < 2⁵³, así que en la doble precisión de JavaScript son exactos. Los tests exigen igualdad exacta (`toEqual`) con los ficheros de referencia de Python:
+- 330 manos: conteos, código, combinaciones, suma, pares, tantos y fuerza en los cinco lances;
+- 36 entradas de texto;
+- 3 012 repartos resueltos;
+- 3 546 opciones de descarte con sus numeradores por jugada y sus dos huellas;
+- 234 distribuciones completas.
+
+Se comprobó que los tests detectan errores: con dos fallos sutiles introducidos a propósito, fallaron.
+1. Que los empates los gane el jugador más alejado de la mano.
+2. Un caballo de más entre las cartas no vistas.
+
+*Error del propio test, corregido:* la primera versión calculaba la huella como esperanza × denominador, y la división intermedia la desviaba en 4·10⁻⁶. Una cantidad entera se compara con aritmética entera.
+
+**La carga de datos desconfía de lo que recibe.** Los arrays se indexan por posición, así que si las manos o las opciones de descarte no fueran en el mismo orden que en el núcleo, la web enseñaría las cifras de otra mano **sin ningún error visible**. Por eso, al cargar el manifiesto se comprueba:
+- que sus 330 manos y 3 546 opciones coinciden, una a una, con las que calcula el núcleo;
+- que las reglas son las de la web;
+- el formato.
+
+Además, cada fichero se verifica con su huella SHA-256 (Web Crypto). Esto detecta ficheros a medio descargar o de otra versión guardados en la caché del navegador, un riesgo real en una web que funciona sin conexión. Las descargas fallidas no se guardan, para poder reintentar cuando vuelva la cobertura. Un manifiesto mal formado da un `ErrorDatos` claro, no un `TypeError`.
+
+**Los ficheros versionados no pueden quedarse desfasados.** Dos tests de Python lo comprueban:
+- los ficheros de referencia coinciden byte a byte con los que genera el exportador;
+- los datos de la web pasan su manifiesto y son de la misma versión del motor.
+
+Si alguien cambia el motor y no regenera, fallan.
+
+**Comprobado en un navegador real** con una página provisional (la interfaz es el paso 3): el manifiesto se valida, los ficheros se descargan con su huella correcta y no hay errores en la consola. El paquete pesa 228 KB (72 KB comprimido) con React incluido; los datos, 682 KB comprimidos.

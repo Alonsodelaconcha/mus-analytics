@@ -1,6 +1,7 @@
 """Tests del exportador de la web y de los ficheros de referencia (Fase 4)."""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -289,3 +290,32 @@ def test_cli_solo_referencia(tmp_path, capsys):
 def test_cli_rechaza_cuatro_reyes(tmp_path):
     assert main(["--variante", "4reyes", "exportar-web", "--salida", str(tmp_path / "d"),
                  "--referencia", str(tmp_path / "r")]) == 1
+
+
+# --- Ficheros versionados en git -------------------------------------------------------------
+
+RAIZ = Path(__file__).resolve().parents[1]
+
+
+def test_referencia_versionada_al_dia(tmp_path):
+    """Si cambia el motor o el exportador, hay que regenerar los ficheros de referencia
+    (python -m mus exportar-web --solo-referencia): el núcleo en TypeScript se prueba con ellos."""
+    for ruta in exportar_referencia(tmp_path):
+        versionado = RAIZ / "web" / "test" / "referencia" / ruta.name
+        assert versionado.read_bytes() == ruta.read_bytes(), f"{ruta.name} está desfasado"
+
+
+def test_datos_versionados_integros_y_de_esta_version():
+    import mus
+    from mus import cortar, equity, tras_mus, web
+
+    directorio = RAIZ / "web" / "public" / "datos"
+    assert comprobar_manifiesto(directorio) == []
+    m = leer(directorio / "manifiesto.json")
+    assert m["formato"] == web.FORMATO
+    assert m["versiones"] == {"paquete": mus.__version__, "equity": equity.VERSION_MOTOR,
+                              "tras_mus": tras_mus.VERSION_SIMULACION,
+                              "cortar": cortar.VERSION_SIMULACION,
+                              "decisiones": web.VERSION_DECISIONES}, \
+        "los datos de la web son de otra versión del motor: regenerarlos con exportar-web"
+    assert m["manos"] == [x.texto(TABLA.baraja) for x in TABLA.manos]
