@@ -227,3 +227,13 @@ Nada del modelo frena esa espiral: en paso no hay envites que hagan valer más l
 Definiciones usadas para preguntar al compañero, sobre su mano inicial:
 - "va bien": medias o duples, 31, o al menos dos reyes;
 - "flojo": sin pares, sin juego y como mucho un rey.
+
+## 2026-10-07 · Calibración de λ con partidas reales
+
+**Qué se mide.** El usuario anota, en partidas reales contra personas, en qué proporción de manos hay mus en la primera ronda (`datos/mus_real.csv`, una fila por sesión). El modelo da esa misma proporción en función de λ: P(hay mus) baja de forma monótona desde el 100 % con λ = 0 hasta el 11 % con λ = 1. Por eso se puede invertir: se busca el λ que reproduce lo observado, interpolando una curva de 11 puntos.
+
+**Incertidumbre.** El intervalo de λ sale de invertir el intervalo de Wilson de la proporción observada. Si parte del intervalo queda fuera de lo que da el modelo (menos del 11 % de mus), el extremo se recorta a 1 y se avisa.
+
+**No cambia nada por sí solo.** A 2026-10-07 hay 7 manos, con mus en 2: un 29 %, con intervalo del 8 % al 64 %. Eso corresponde a λ ≈ 0,65, con un intervalo de 0,26 a 1. Es demasiado ancho para decidir. Con 40-50 manos se ejecutará `python -m mus calibrar` y se decidirá con el usuario si cambia el λ por defecto.
+
+**Limitación.** λ resume en un único número cómo cortan los jugadores. Los jugadores reales no cortan exactamente como los rivales razonables escalados: influyen el marcador, las señas y el estilo. Es una calibración gruesa del escenario.

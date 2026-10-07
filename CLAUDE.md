@@ -66,16 +66,21 @@ Variante alternativa a soportar: 4 reyes / 4 ases.
 - Haz un commit con un mensaje claro y descriptivo al terminar cada tarea que funcione.
 
 ## Estado actual
-- **Fase 1 – terminada y aprobada.** Paquete `src/mus` (reglas, cartas, evaluacion, tablas, simulacion, analisis) + CLI (`evaluar`, `resolver`, `distribucion`, `verificar`, `tabla`, `grafica`). 134 tests en verde. Valores de referencia comprobados: P(≥1 Rey) = 0,606522; P(pares) = 0,565817; P(juego) = 0,267469.
-- Entorno: Python 3.14 en `.venv` (`pip install -e ".[dev]"`). Las salidas generadas van a `resultados/` (ignorado por git).
-- Reglas confirmadas y diseño: ver `docs/decisiones.md`.
-- Para resolver lances de forma vectorizada usar `simulacion.ganadores_lance` (aplica el filtro del punto; repartos siempre en orden de juego, columna 0 = mano).
-- **Fase 2 – terminada y aprobada.** Módulos `condiciones` (predicados genéricos sobre una mano, sintaxis de texto) y `equity` (exacta por programación dinámica sobre el mazo restante, verificación Monte Carlo, tabla completa con caché en `resultados/cache/`). CLI: `equity`, `equity-tabla`, `ranking`, `mesa`, `grafica-posicion`, `grafica-condicion`.
-- Tests: `pytest` ejecuta solo los rápidos (~10 s); `pytest -m slow` lanza los lentos (fuerza bruta, Monte Carlo grandes, tabla completa). Cambiar el cálculo de equity exige subir `equity.VERSION_MOTOR` para invalidar la caché.
-- **Fase 3 – en curso.** Plan y reglas del mus confirmadas en `docs/decisiones.md`. Reglas del descarte en `ReglasMus.descarte` (`ReglasDescarte`: mínimo/máximo de cartas, rebarajado, límite de rondas).
-  - **3a – terminada y aprobada.** Módulo `descarte` (opciones distintas, distribución exacta de la mano final, objetivos con pesos por lance, tabla de descartes recomendados, opciones prácticamente equivalentes, cartas pedidas ponderadas, verificación Monte Carlo). CLI: `descarte`, `descarte-tabla`.
-  - **3b – terminada y aprobada.** Módulo `tras_mus`: políticas de descarte, marginal exacta tras el mus, equity tras el mus **por simulación de la ronda completa**, valoración de una mano con la ronda simulada (números aleatorios comunes), punto fijo con amortiguación y criterio de explotabilidad, y verificación independiente. CLI: `tras-mus` y la opción `--tras-mus` en `descarte` y `descarte-tabla`. Todos dan mus siempre: sin efecto de selección. Se descartó la aproximación con el motor exacto reponderado (ver `docs/decisiones.md`); `equity(..., pesos=...)` se mantiene para la 3c.
-  - **3c – terminada, pendiente del visto bueno.** Módulos `cortar` (política de corte, simulación con efecto de selección por pesos de importancia, equilibrio corte ↔ descarte con amortiguación 1/(t+1), escenario de rivales razonables con `factor_corte`, decisión para una mano con condición opcional sobre el compañero) y `testigos` (casos del usuario como datos). CLI: `corte-mesa`, `cortar`, `testigos`. El equilibrio del modelo es degenerado (casi nunca hay mus); el escenario principal es el de rivales razonables. Resultados y discrepancias con los casos testigo en `docs/decisiones.md`.
+- **Fases 1, 2 y 3 – terminadas y aprobadas** (motor completo en paso). Resumen para portfolio en `README.md`; decisiones, alternativas y errores encontrados en `docs/decisiones.md`.
+- **Fase 4 – plan propuesto, pendiente de confirmación** (web estática para el móvil en GitHub Pages, sin servidor, con tablas precalculadas en JSON).
+
+Motor (`src/mus`):
+- **Fase 1:** `reglas`, `cartas`, `evaluacion`, `tablas`, `simulacion`, `analisis`. Valores de referencia: P(≥1 Rey) = 0,606522; P(pares) = 0,565817; P(juego) = 0,267469. Para resolver lances de forma vectorizada usar `simulacion.ganadores_lance` (aplica el filtro del punto; repartos siempre en orden de juego, columna 0 = mano).
+- **Fase 2:** `condiciones` (predicados sobre una mano, sintaxis de texto) y `equity` (exacta por programación dinámica sobre el mazo restante, con pesos por asiento; tabla completa con caché en `resultados/cache/`). Cambiar el cálculo exige subir `equity.VERSION_MOTOR`.
+- **Fase 3:** `descarte` (3a: opciones y distribución exacta de la mano final), `tras_mus` (3b: mesa tras el mus por simulación de la ronda completa, punto fijo con criterio de explotabilidad) y `cortar` (3c: efecto de selección, equilibrio degenerado y escenario principal de rivales razonables con `factor_corte` λ). Reglas del mus en `ReglasMus.descarte`. Casos testigo en `testigos` y `docs/casos_testigo.md`.
+- **Calibración de λ:** `calibracion` + `datos/mus_real.csv` (una fila por sesión: manos y manos con mus en la primera ronda). A 2026-10-07: 7 manos, mus en 2 (29 %; λ ≈ 0,65, intervalo 0,26-1). **No cambiar el λ por defecto (1)** hasta tener 40-50 manos; entonces ejecutar `python -m mus calibrar` y decidirlo con el usuario.
+
+CLI (`python -m mus ...`): `evaluar`, `resolver`, `distribucion`, `verificar`, `tabla`, `grafica`, `equity`, `equity-tabla`, `ranking`, `mesa`, `grafica-posicion`, `grafica-condicion`, `descarte`, `descarte-tabla`, `tras-mus`, `corte-mesa`, `cortar`, `testigos`, `calibrar`.
+
+Entorno y tests:
+- Python 3.14 en `.venv` (`pip install -e ".[dev]"`). Las salidas generadas van a `resultados/` (ignorado por git).
+- `pytest` ejecuta solo los rápidos (~20 s); `pytest -m slow`, los lentos (fuerza bruta, Monte Carlo grandes, tabla completa; ~2 min).
+- En PowerShell, los mensajes de commit con comillas dobles se rompen: usar `git commit -F fichero`.
 
 ## Pendientes para fases futuras
 - **Fase 5 (entrenador):** usar el número de cartas que pide cada jugador (información pública) como condición sobre su mano, a partir de la política de descarte. Será clave para el entrenador.

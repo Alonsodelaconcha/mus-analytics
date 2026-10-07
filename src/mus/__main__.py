@@ -50,6 +50,14 @@ from mus.analisis import (
     probabilidades_mesa,
     ranking,
 )
+from mus.calibracion import (
+    MANOS_RECOMENDADAS,
+    RUTA_DATOS,
+    Observacion,
+    calibrar,
+    curva_hay_mus,
+    leer_observaciones,
+)
 from mus.cartas import parsear_mano
 from mus.condiciones import AYUDA_SINTAXIS, parsear_condicion
 from mus.cortar import SIMULACIONES_POR_VUELTA as SIMULACIONES_CORTE
@@ -533,6 +541,35 @@ def cmd_testigos(args: argparse.Namespace) -> None:
               f"{texto_conteos(d.mejor_descarte.conservadas, baraja)}")
 
 
+def cmd_calibrar(args: argparse.Namespace) -> None:
+    if args.manos is not None:
+        observacion = Observacion(args.manos, args.con_mus or 0)
+        origen = "datos de la línea de órdenes"
+    else:
+        observacion = leer_observaciones(args.datos)
+        origen = args.datos
+    curva = curva_hay_mus(_reglas(args))
+    c = calibrar(observacion, curva)
+    bajo, alto = c.p_observada.intervalo
+    print(f"Partidas reales ({origen}): mus en {observacion.con_mus} de {observacion.manos} manos "
+          f"= {100 * c.p_observada.p:.0f} % (IC 95 %: {100 * bajo:.0f}-{100 * alto:.0f} %)")
+    print("\nModelo (rivales razonables con su corte ×λ): P(hay mus en la primera ronda)")
+    print("  " + "  ".join(f"λ={l:g}: {100 * p:.0f} %" for l, p in curva))
+    print(f"\nλ compatible con los datos: {c.lambda_estimada:.2f} "
+          f"(intervalo {c.lambda_intervalo[0]:.2f}-{c.lambda_intervalo[1]:.2f}"
+          + (", recortado: parte del intervalo de la proporción queda fuera de lo que da el "
+             "modelo)" if c.intervalo_recortado else ")"))
+    if not c.dentro_del_rango:
+        print("AVISO: la proporción observada queda fuera de lo que da el modelo; λ se ha "
+              "recortado a 0 o 1.")
+    if not c.suficiente:
+        print(f"Con {observacion.manos} manos el intervalo es demasiado ancho para decidir: "
+              f"conviene llegar a {MANOS_RECOMENDADAS}-50. No se cambia nada.")
+    else:
+        print(f"Para usarlo: --factor-corte {c.lambda_estimada:.2f} en 'cortar' y 'testigos'. "
+              "El valor por defecto (1) no cambia solo.")
+
+
 def _ventaja(d: DecisionCorte) -> str:
     v = d.ventaja_mus
     return f"{d.decision:<12}{v.media:+.3f} [{v.intervalo[0]:+.3f}, {v.intervalo[1]:+.3f}]"
@@ -685,6 +722,14 @@ def crear_parser() -> argparse.ArgumentParser:
     p.add_argument("--semilla", type=int, default=1)
     p.add_argument("--factor-corte", type=float, default=1.0, help=ayuda_factor)
     p.set_defaults(func=cmd_testigos)
+
+    p = sub.add_parser("calibrar", help="λ compatible con la frecuencia de mus observada en "
+                                        "partidas reales (no cambia nada).")
+    p.add_argument("--datos", default=str(RUTA_DATOS),
+                   help="CSV con columnas sesion,fecha,manos,con_mus,notas.")
+    p.add_argument("--manos", type=int, help="Manos observadas (en vez de leer el CSV).")
+    p.add_argument("--con-mus", type=int, help="Manos con mus en la primera ronda.")
+    p.set_defaults(func=cmd_calibrar)
 
     p = sub.add_parser("grafica-posicion", help="Equity siendo mano frente a postre.")
     p.add_argument("--salida", required=True)

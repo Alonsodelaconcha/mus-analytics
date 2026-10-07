@@ -1,90 +1,130 @@
-# mus-analytics
+# Mus Analytics
 
-Motor de estadísticas y estrategia para el mus (variante a 8 reyes por defecto; también 4 reyes).
+Motor de estadísticas y estrategia para el **mus**, en su variante más extendida, a 8 reyes (también admite 4 reyes). Calcula con cuánta probabilidad gana cada mano cada lance, cómo conviene descartarse y cuándo merece la pena cortar el mus.
+
+La idea es parecida a la de las calculadoras de póker (Equilab, GTO Wizard), pero para el mus y pensada para jugadores reales. Este repositorio contiene el **motor** en Python, la base de una futura web para el móvil.
+
+> **Estado:** motor terminado en sus tres primeras fases (cálculo exacto de probabilidades, equity por posición y descarte / cortar mus). La web está en preparación.
+
+## Qué calcula
+
+- **Probabilidades exactas de cualquier mano**: pares, medias, duples, juego, 31, punto… Como el palo no importa, solo hay 330 manos distintas, y todas se calculan de forma exacta.
+- **Equity por lance y posición**: para una mano y una posición (mano, segundo, tercero o postre), la probabilidad de ganar cada lance tú solo y con tu pareja, y los tantos que se esperan. Se puede añadir información sobre la mano del compañero, del tipo "lleva medias o mejor" o "no tiene juego".
+- **Asesor de descarte**: compara todas las formas de descartarse y recomienda según el objetivo (tantos totales, grande, chica, pares o juego), con la distribución exacta de la mano que te quedará.
+- **La mesa después del mus**: cómo cambian las manos de todos cuando los cuatro se descartan, y cuánto vale tu mano frente a esa mesa.
+- **Cortar o dar mus**: compara las dos decisiones teniendo en cuenta lo que dicen los demás. Si los que hablan antes han dado mus, probablemente van flojos; si los de después pueden cortar, el mus no está garantizado.
+
+## Cómo se ha verificado
+
+Toda cifra del motor se ha contrastado al menos de dos formas independientes:
+
+- **Fuerza bruta.** Se recorren las 91 390 manos físicas de 4 cartas, o todos los repartos posibles de las otras tres manos, sin compartir código con el cálculo principal. Coincide con el cálculo exacto hasta el noveno decimal.
+- **Monte Carlo con intervalos de confianza.** Cada simulación se compara con el valor exacto cuando existe. Cuando se hacen muchas comparaciones a la vez, se corrige el nivel de confianza (Bonferroni) para no confundir el azar con un error.
+- **Identidades que deben cumplirse.** Cada lance tiene un único ganador, los tantos de las dos parejas suman cero y P(se juega el juego) + P(se juega el punto) = 1.
+
+Una aproximación que parecía razonable (reponderar el reparto inicial para representar la mesa tras el mus) **no pasó la verificación** y se sustituyó por la simulación de la ronda completa. Está explicado en [docs/decisiones.md](docs/decisiones.md).
+
+## Resultados destacados
+
+Todas las cifras son tantos **en paso**, es decir, sin envites. Ver [Limitaciones](#limitaciones).
+
+**Probabilidades básicas (8 reyes, exactas).**
+
+| | |
+|---|---|
+| Al menos un rey | 60,7 % |
+| Llevar pares | 56,6 % |
+| Llevar juego | 26,7 % |
+| Llevar 31 | 9,2 % |
+
+**Cuánto vale ser mano.**
+- Antes del mus, la pareja de la mano gana de media **+0,11 tantos por mano**.
+- La posición pesa sobre todo en pares y juego, donde los empates son frecuentes. Ganar los pares tú solo pasa del 26,3 % siendo mano al 22,1 % siendo postre. Con una 31, siendo mano se gana el juego siempre; siendo postre, el 73 % de las veces.
+- La equity de la pareja **no** siempre mejora al acercarse a la mano. Con una mano floja, a la pareja le va mejor si el compañero es mano, porque es él quien gana los empates. En grande pasa en 264 de las 330 manos.
+
+**La mesa cambia mucho tras el mus** (los cuatro se descartan de la forma que más les conviene):
+
+| | Reparto inicial | Tras el mus |
+|---|---|---|
+| Llevar juego | 26,7 % | ~56 % |
+| Llevar pares | 56,6 % | ~72 % |
+| Llevar 31 | 9,2 % | ~18 % |
+| Se juega el punto (nadie tiene juego) | 24,7 % | 1,3 % |
+| Ventaja de la pareja de la mano | +0,11 | **+0,39** tantos por mano |
+
+Tras el mus casi siempre se juega el juego y los empates a 31 son frecuentes, así que ser mano vale más. Por eso el postre se descarta de forma distinta: tira las cuatro cartas mucho menos y va menos a juego.
+
+**Dar mus vale menos de lo que parece.** Con R R C S siendo mano, si los rivales no se descartaran, dar mus mejoraría +0,73 tantos. Como ellos también mejoran, dar mus pasa a **empeorar −0,34**: conviene cortar.
+
+**El equilibrio del modelo es degenerado.** Si se busca la estrategia estable de cortar y descartarse para los cuatro, el resultado es una mesa en la que casi nunca hay mus (0,4 % de las manos). La razón:
+1. El mus favorece de media a la pareja de la mano, así que a la otra pareja no le interesa.
+2. Dar mus revela que tu mano es floja, y quien habla después lo aprovecha cortando.
+3. Valorando en paso, nada frena esa espiral.
+
+En la mesa real hay mus mucho más a menudo. Por eso el modelo usa por defecto **rivales razonables**: cortan cuando les conviene suponiendo que todos dan mus. Con ellos hay mus en el 11,5 % de las manos. Cuánto cortan se puede ajustar con un parámetro λ (ver [Calibración](#calibración-con-partidas-reales)).
+
+**Validación con un jugador real.** Antes de calcular nada, un jugador apuntó qué haría con 8 manos siendo mano y siendo postre ([docs/casos_testigo.md](docs/casos_testigo.md)). Esos casos no se usaron para ajustar el modelo.
+- **Los 12 "corto" coinciden con el modelo**, y con margen amplio.
+- Las discrepancias (R C 5 4: el jugador da mus; A A 4 5: dudaría) **dependen de cuánto se corte en la mesa**. Si se da mus en más del ~15-20 % de las manos, la decisión del jugador es la mejor; si los rivales cortan mucho, cortar sale algo mejor.
+- Con A A 4 5 de postre, preguntar al compañero cambia la decisión: si va flojo, conviene dar mus; si va bien, cortar.
+
+El análisis detallado de cada caso está en [docs/decisiones.md](docs/decisiones.md).
+
+## Limitaciones
+
+- **Valores en paso, sin envites, órdagos ni marcador.** Es lo que más pesa en las decisiones dudosas y la causa del equilibrio degenerado. Está previsto para una fase posterior.
+- **Una sola ronda de mus.**
+- **Sin señas ni coordinación de pareja**, salvo que se indique a mano lo que lleva el compañero.
+- **El cálculo de la mesa tras el mus es por simulación**, con su margen de error, que siempre se muestra. Lo demás es exacto.
 
 ## Instalación
 
+Requiere Python 3.10 o superior (desarrollado con 3.14).
+
 ```bash
-py -3.14 -m venv .venv
+python -m venv .venv
+```
+```bash
 .venv\Scripts\activate
+```
+```bash
 pip install -e ".[dev]"
 ```
 
-## Uso
+En Linux o macOS, el segundo paso es `source .venv/bin/activate`.
+
+## Comandos principales
+
+Las cartas se escriben `A 4 5 6 7 S C R`. También se aceptan `1`, `10`, `11` y `12`, y en 8 reyes `2` = As y `3` = Rey. Las posiciones van de 1 (mano) a 4 (postre).
 
 ```bash
 python -m mus evaluar "R R C 5"
-python -m mus resolver "R R C 5" "7 7 7 S" "A A 4 5" "C C S S"
-python -m mus distribucion
-python -m mus verificar --n 1000000 --semilla 42 --csv resultados/verificacion.csv
-python -m mus tabla --csv resultados/manos.csv
-python -m mus grafica --salida resultados/distribucion.png
-python -m mus --variante 4reyes distribucion
-python -m mus --31-real distribucion
-```
-
-Las cartas se escriben `A 4 5 6 7 S C R` (también `1`, `10`, `11`, `12`; en 8 reyes, `2` = As y `3` = Rey).
-
-### Equity (Fase 2)
-
-```bash
 python -m mus equity "R R C 5" --posicion 1
-python -m mus equity "R R C 5" --posicion 1 --companero "pares>=medias" --n 1000000
-python -m mus ranking --lance pares --posicion 4 --top 15
-python -m mus mesa
-python -m mus equity-tabla --csv resultados/equity.csv --json resultados/equity.json --rankings resultados/rankings.csv
-python -m mus grafica-posicion --salida resultados/posicion.png
-python -m mus grafica-condicion "R R C 5" --companero "sin_pares" --salida resultados/condicion.png
-```
-
-**Las condiciones van siempre entre comillas.** En PowerShell, y en cualquier shell, `>` y `<` sin comillas redirigen la salida a un fichero. Sintaxis: cláusulas separadas por comas, que se combinan con "y": `sin_pares`, `con_pares`, `sin_juego`, `con_juego`, `pares>=medias`, `pares=duples`, `juego=31`, `suma>=28`, `reyes>=2`, `ases<=1`…
-
-La tabla completa (330 manos × 4 posiciones) tarda ~45 s la primera vez y se guarda en `resultados/cache/`.
-
-### Descarte (Fase 3a)
-
-```bash
-python -m mus descarte "R R C 5" --posicion 1
-python -m mus descarte "R R C 5" --posicion 1 --objetivo grande --n 200000
-python -m mus descarte "A A 4 5" --pesos "chica=2,punto=0"
-python -m mus descarte-tabla --objetivo tantos --csv resultados/descartes_tantos.csv
-```
-
-Objetivos: `tantos` (tantos netos en paso, por defecto), `grande`, `chica`, `pares` y `juego` (P de ganar yo ese lance). Con `--pesos` se ponderan los tantos de cada lance. Las opciones que difieren menos de `--umbral` (0,005 por defecto) se marcan como prácticamente equivalentes (≈).
-
-Por defecto, la valoración usa la equity del reparto inicial. Con `--tras-mus` se valora contra la mesa tras el mus (los rivales también se descartan), y la mano servida se compara con la equity de cortar.
-
-### Mesa tras el mus (Fase 3b)
-
-```bash
-python -m mus tras-mus
-python -m mus tras-mus --verificar 2000000 --semilla 1
-python -m mus descarte "R R C S" --posicion 1 --tras-mus
-python -m mus descarte "R R C S" --posicion 1 --tras-mus --n 400000 --semilla 7
-python -m mus descarte-tabla --tras-mus --csv resultados/descartes_tras_mus.csv
-```
-
-`tras-mus` itera la política de descarte de los cuatro jugadores y la equity tras el mus, que se estima simulando rondas completas, hasta un punto fijo. La primera vez simula unas pocas vueltas (~1 min en total), que quedan en `resultados/cache/`. Muestra:
-- cómo cambia la distribución de manos tras el mus;
-- cuántas cartas se piden;
-- las probabilidades de mesa antes y después del mus.
-
-Con `--verificar N` compara la mesa con N rondas simuladas de forma independiente.
-
-`descarte --tras-mus --n N` valora cada opción simulando la ronda con esa mano fija (sobre los mismos repartos para todas las opciones) y la compara con cortar.
-
-### Cortar o dar mus (Fase 3c)
-
-```bash
-python -m mus cortar "R R C S" --posicion 1
+python -m mus equity "R R C 5" --posicion 1 --companero "pares>=medias"
+python -m mus descarte "R C 5 4" --posicion 1
+python -m mus descarte "R R C S" --posicion 1 --tras-mus --n 400000
+python -m mus cortar "A A 4 5" --posicion 4
 python -m mus cortar "A A 4 5" --posicion 4 --companero "sin_pares, sin_juego, reyes<=1"
-python -m mus cortar "R C 5 4" --posicion 1 --factor-corte 0.5
-python -m mus corte-mesa --csv resultados/corte.csv
-python -m mus corte-mesa --escenario equilibrio
+python -m mus tras-mus
 python -m mus testigos
+python -m mus calibrar
 ```
 
-Por defecto, los rivales son "razonables": cortan si les conviene suponiendo que todos dan mus. Con `--factor-corte` se escala cuánto cortan (0 = nadie corta). `--escenario equilibrio` usa el punto fijo de corte y descarte; en este modelo, en paso, casi nunca hay mus. `testigos` compara los casos testigo del usuario (`docs/casos_testigo.md`) con el modelo en los dos escenarios.
+**Las condiciones sobre el compañero van siempre entre comillas.** Sin ellas, los símbolos `>` y `<` redirigen la salida a un fichero en cualquier terminal.
+
+Sintaxis: cláusulas separadas por comas, que se combinan con "y". Por ejemplo: `sin_pares`, `con_pares`, `sin_juego`, `pares>=medias`, `pares=duples`, `juego=31`, `suma>=28`, `reyes>=2`, `ases<=1`.
+
+Otros comandos: `distribucion`, `verificar`, `ranking`, `mesa`, `equity-tabla` (exporta CSV/JSON), `descarte-tabla`, `corte-mesa` y gráficas (`grafica`, `grafica-posicion`, `grafica-condicion`). `python -m mus <comando> --help` describe cada uno.
+
+Algunos cálculos tardan entre uno y varios minutos la primera vez y se guardan en `resultados/cache/`; las siguientes veces son inmediatos.
+
+## Calibración con partidas reales
+
+Las decisiones dudosas de cortar o dar mus dependen de cuánto se corta en la mesa. Para ajustarlo con datos reales:
+
+1. Apunta en `datos/mus_real.csv` cuántas manos has jugado y en cuántas hubo mus en la primera ronda (una fila por sesión).
+2. Ejecuta `python -m mus calibrar`. Muestra el porcentaje observado con su intervalo de confianza y el λ con el que el modelo da ese mismo porcentaje.
+3. Con unas 40-50 manos, el λ calibrado se puede usar con `--factor-corte`. El comando no cambia nada por sí solo.
 
 ## Tests
 
@@ -95,20 +135,21 @@ python -m pytest
 python -m pytest -m slow
 ```
 
-El primero ejecuta los tests rápidos (~10 s). El segundo, las verificaciones costosas: fuerza bruta, Monte Carlo grandes y tabla de equity completa (unos minutos).
+El primero lanza los tests rápidos (unos segundos). El segundo, las verificaciones costosas: fuerza bruta, simulaciones grandes y la tabla de equity completa (unos minutos).
 
 ## Estructura
 
-- `src/mus/reglas.py`: configuración de reglas (variante, orden del juego, 31 real, puntuación).
-- `src/mus/cartas.py`: baraja y representación canónica de manos.
-- `src/mus/evaluacion.py`: claves de cada lance y resolución entre 4 jugadores.
-- `src/mus/tablas.py`: evaluaciones precalculadas de las 330 manos.
-- `src/mus/simulacion.py`: reparto Monte Carlo vectorizado e intervalos de Wilson.
-- `src/mus/condiciones.py`: condiciones sobre la mano de otro jugador (información del compañero o de los rivales).
-- `src/mus/equity.py`: equity exacta por mano, posición y lance (individual y pareja), tantos netos en paso y verificación Monte Carlo.
-- `src/mus/descarte.py`: formas de descartarse, distribución exacta de la mano resultante y descarte recomendado según el objetivo.
-- `src/mus/tras_mus.py`: políticas de descarte, distribución de la mesa tras el mus, iteración hasta el punto fijo y simulador de la ronda completa.
-- `src/mus/cortar.py`: cortar o dar mus con el efecto de selección (equilibrio y rivales razonables).
-- `src/mus/testigos.py`: casos testigo del usuario como datos, para validar.
-- `src/mus/analisis.py`: distribuciones exactas, verificación, rankings y exportación (CSV, JSON y gráficas).
-- `docs/decisiones.md`: decisiones de diseño y sus motivos.
+| Módulo | Contenido |
+|---|---|
+| `reglas.py` | Reglas configurables: variante, orden del juego, 31 real, puntuación y reglas del mus |
+| `cartas.py`, `evaluacion.py`, `tablas.py` | Baraja, evaluación de cada lance y tablas de las 330 manos |
+| `simulacion.py` | Reparto Monte Carlo vectorizado e intervalos de confianza |
+| `condiciones.py` | Información sobre la mano de otro jugador |
+| `equity.py` | Equity exacta por mano, posición y lance |
+| `descarte.py` | Opciones de descarte y distribución exacta de la mano resultante |
+| `tras_mus.py` | La mesa tras el mus: políticas de descarte, simulación de la ronda y equilibrio |
+| `cortar.py` | Cortar o dar mus con el efecto de selección |
+| `calibracion.py`, `testigos.py` | Calibración con partidas reales y casos testigo |
+| `analisis.py` | Exportación a CSV y JSON, rankings y gráficas |
+
+La documentación de diseño está en [docs/decisiones.md](docs/decisiones.md): cada decisión importante, sus alternativas y los errores encontrados por el camino.
