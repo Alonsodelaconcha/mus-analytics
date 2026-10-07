@@ -72,3 +72,11 @@ Siempre visible pero discreto: "ⓘ Cifras sin apostar (en paso)", que al tocarl
 - **Señas combinables.** En vez de un fichero por seña, uno por cada conjunto distinto de manos que pueden dejar las señas: 16 (las 11 señas sueltas y 5 combinaciones). Cualquier otra combinación coincide con una de ellas o es imposible.
 - **"¿Mus o corto?" mano a mano.** En vez de leer la decisión de la simulación agregada de la mesa (con poca precisión en las manos raras), cada mano y posición se simula con sus cartas fijas, como `python -m mus cortar`. Cuesta más tiempo de cálculo (una vez), pero la precisión no depende de lo rara que sea la mano y el descarte es la mejor respuesta de esa mano.
 - **Valor de cada descarte precalculado.** Sale de la misma simulación, sabiendo que hay mus. El navegador solo calcula la distribución exacta de la mano final (P(pares), P(juego)...), que es exacta y barata.
+
+## Decisión sobre la probabilidad de ganar (2026-10-08)
+
+La web pregunta "¿Ha habido mus?".
+- **No:** probabilidades exactas, con las señas del compañero.
+- **Sí:** las de la mesa tras el mus del tipo de mesa elegido, sin señas.
+
+Las limitaciones (sin señas tras el mus, sin tener en cuenta quién ha cortado) se explican claramente en la web. Las dos mejoras son de prioridad alta en la versión 2.

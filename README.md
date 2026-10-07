@@ -125,6 +125,9 @@ Las decisiones dudosas de cortar o dar mus dependen de cuánto se corta en la me
 1. Apunta en `datos/mus_real.csv` cuántas manos has jugado y en cuántas hubo mus en la primera ronda (una fila por sesión).
 2. Ejecuta `python -m mus calibrar`. Muestra el porcentaje observado con su intervalo de confianza y el λ con el que el modelo da ese mismo porcentaje.
 3. Con unas 40-50 manos, el λ calibrado se puede usar con `--factor-corte`. El comando no cambia nada por sí solo.
+4. Opcional: apunta en `datos/cortes_por_posicion.csv` cuántas veces le toca hablar a cada posición y cuántas corta. `calibrar` lo compara con lo que predice el modelo para cada posición.
+
+Con las primeras 45 manos reales (sin contar la primera de cada partida, que se juega con mus corrido y sin señas), hubo mus en el 29 %: λ ≈ 0,65. El corte por posición encaja con el modelo (χ² con p = 0,90), y la pareja segundo-postre corta 1,8 veces más que la de la mano, frente a 1,6 que predecía el modelo.
 
 ## Tests
 

@@ -347,3 +347,44 @@ Tamaño: 21 ficheros, 2,9 MB sin comprimir y **682 KB con gzip** (la propuesta e
 - 24 casos al azar por tipo de mesa, simulados de nuevo con otra semilla: las diferencias normalizadas (z) tienen media ≈ 0 y desviación típica ≈ 1, como deben. El máximo es |z| = 2,2, por debajo del umbral de 4,35 (99,9 % global con Bonferroni).
 - Los 16 casos testigo en la mesa "Se corta mucho" reproducen las cifras de la Fase 3c.
 - Regenerar desde la caché en otra carpeta da ficheros idénticos.
+
+## 2026-10-08 · Fase 4: qué probabilidad de ganar enseña la web
+
+Las probabilidades exactas con señas son las de las cartas **tal como se repartieron**. Valen cuando la mano se juega sin mus (alguien corta), que en una mesa "Normal" es el 70 % de las manos. Si hay mus, las manos de los demás mejoran mucho (el juego pasa del 27 % a ~56 %) y esas cifras dejan de valer.
+
+**Decisión (aprobada por el usuario).** La web pregunta "¿Ha habido mus?":
+- **No**: probabilidades exactas, con las señas del compañero.
+- **Sí**: las de la mesa tras el mus del tipo de mesa elegido (ya exportadas en `mesa-<tipo>.json`), **sin señas**.
+
+Las dos limitaciones se explicarán claramente en la web:
+1. Tras el mus no se pueden usar las señas.
+2. No se tiene en cuenta quién ha cortado: si corta un rival, suele ir bien, y la web no lo refleja.
+
+**Versión 2, prioridad alta:**
+- Señas tras el mus. Habría que simular la mesa agrupando por la mano final del compañero, con su margen de error.
+- Quién ha cortado, como condición sobre el asiento que corta. Es exacto con el motor de la Fase 2: el que corta pesa κ(mano), los anteriores 1 − κ(mano), como en el test de la 3c que verifica el efecto de selección.
+
+## 2026-10-08 · Datos reales: calibración de λ y corte por posición
+
+**Qué manos se cuentan.** El usuario excluye la primera mano de cada partida: se juega con "mus corrido y sin señas", la norma tradicional para determinar la mano sin comunicación entre compañeros, así que no refleja decisiones de mus. También excluye una mano que no recuerda. Quedan 9 sesiones con 45 manos; la primera sustituye a la que había. **Fase 6:** al modelar la partida completa, la primera mano de cada partida tiene estas reglas especiales.
+
+**Calibración.** Hubo mus en 13 de 45 manos: 29 % (IC 95 %: 18-43 %). Corresponde a λ = 0,65 (intervalo 0,46-0,85). La mesa "Normal" de la web usa λ = 0,63 (30 %), dentro del intervalo, así que se deja como está. `calibrar` lo comprueba ahora cada vez.
+
+**Corte por posición** (`datos/cortes_por_posicion.csv`). Es una comprobación independiente de la calibración: λ se ajustó con un solo número, la frecuencia total de mus, así que **el reparto del corte entre posiciones es una predicción del modelo que no se ha ajustado con estos datos**. Los datos son coherentes: cada posición habla tantas veces como la anterior menos las que cortó, y los que llegan al final sin corte son las 13 manos con mus.
+
+| Posición | Corta / habla | Observado (IC 95 %) | Modelo, mesa "Normal" | p (binomial exacto) |
+|---|---|---|---|---|
+| Mano | 8 / 45 | 18 % (9-31 %) | 21 % | 0,72 |
+| Segundo | 11 / 37 | 30 % (17-46 %) | 33 % | 0,86 |
+| Tercero | 5 / 26 | 19 % (9-38 %) | 18 % | 0,80 |
+| Postre | 8 / 21 | 38 % (21-59 %) | 30 % | 0,48 |
+
+- **Contraste global** (Pearson, 4 g.l.): χ² = 1,07, p = 0,90. Los datos encajan con el modelo.
+- **Por parejas.** La de la mano corta el 18 % de las veces que habla (modelo: 20 %). La pareja segundo-postre, el 33 % (modelo: 32 %). La segunda corta **1,79 veces más** (IC 95 % 0,97-3,31), y el modelo predice 1,59.
+
+**Interpretación.**
+- La predicción de la Fase 3c (que la pareja 2-4 corta mucho más porque el mus favorece a la de la mano) se confirma en el valor central.
+- Pero con 45 manos el intervalo de la razón casi llega a 1: los datos por sí solos aún no bastan para afirmar la diferencia. Lo que sí muestran es que no contradicen el modelo en ninguna posición.
+- En el modelo, la razón es ~1,6 para cualquier λ. λ escala por igual el corte de los cuatro asientos, así que la estructura entre posiciones viene de los rivales razonables, no de λ.
+
+**Herramientas.** `calibracion.leer_cortes`, `comparar_cortes` (binomial exacto por posición, χ² global con su cola exacta para grados pares y razón entre parejas por el método delta) y `cortes_del_modelo`. `python -m mus calibrar` lo muestra si existe el fichero y avisa si no cuadra con `mus_real.csv`.

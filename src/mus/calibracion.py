@@ -14,18 +14,28 @@ recomienda decidir con al menos :data:`MANOS_RECOMENDADAS`.
 Limitación: λ resume en un número cómo cortan los jugadores. Los jugadores
 reales no cortan exactamente como "rivales razonables escalados"; dependen
 también del marcador, las señas y el estilo. Es una calibración gruesa.
+
+Una comprobación más fina, que no se usa para ajustar nada: en
+``datos/cortes_por_posicion.csv`` se apunta cuántas veces le tocó hablar a cada
+posición y cuántas cortó, y :func:`comparar_cortes` lo contrasta con lo que
+predice el modelo para cada posición (por ejemplo, que la pareja segundo-postre
+corta bastante más que la de la mano).
 """
 
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from dataclasses import dataclass
+from math import comb, exp, factorial, log, sqrt
 from pathlib import Path
+from statistics import NormalDist
 
 from mus.reglas import REGLAS_POR_DEFECTO, ReglasMus
 from mus.simulacion import Estimacion
 
 RUTA_DATOS = Path("datos/mus_real.csv")
+RUTA_CORTES = Path("datos/cortes_por_posicion.csv")
 MANOS_RECOMENDADAS = 40
 LAMBDAS = tuple(round(0.1 * i, 1) for i in range(11))
 
@@ -118,3 +128,130 @@ def calibrar(observacion: Observacion, curva: list[tuple[float, float]],
     (desde, dentro_alto), (hasta, dentro_bajo) = lambda_para(alto, curva), lambda_para(bajo, curva)
     return Calibracion(observacion, p, lam, (desde, hasta), dentro,
                        not (dentro_alto and dentro_bajo))
+
+
+# --- Corte por posición ----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CortesPorPosicion:
+    """Veces que le tocó hablar a cada posición (1-4) y veces que cortó."""
+
+    habla: tuple[int, ...]
+    corta: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.habla) != 4 or len(self.corta) != 4:
+            raise ValueError("Hace falta un dato por posición (4)")
+        if any(not 0 <= c <= h for c, h in zip(self.corta, self.habla)) or self.habla[0] <= 0:
+            raise ValueError("Hace falta 0 <= cortes <= veces que habla, y que la mano hable")
+
+    @property
+    def coherente(self) -> bool:
+        """Una posición solo habla si nadie ha cortado antes: habla[p+1] = habla[p] − corta[p]."""
+        return all(self.habla[p + 1] == self.habla[p] - self.corta[p] for p in range(3))
+
+    @property
+    def con_mus(self) -> int:
+        """Manos en que no cortó nadie (si los datos son coherentes)."""
+        return self.habla[3] - self.corta[3]
+
+
+def leer_cortes(ruta: str | Path = RUTA_CORTES) -> CortesPorPosicion:
+    """Suma las filas del CSV por posición (columnas ``posicion``, ``habla`` y ``corta``)."""
+    ruta = Path(ruta)
+    if not ruta.exists():
+        raise ValueError(f"No existe {ruta}: créalo con columnas fecha,posicion,habla,corta,notas")
+    habla, corta = [0] * 4, [0] * 4
+    with ruta.open(encoding="utf-8") as f:
+        for fila in csv.DictReader(f):
+            p = int(fila["posicion"])
+            if p not in (1, 2, 3, 4):
+                raise ValueError(f"Posición no válida en {ruta}: {p}")
+            habla[p - 1] += int(fila["habla"])
+            corta[p - 1] += int(fila["corta"])
+    return CortesPorPosicion(tuple(habla), tuple(corta))
+
+
+def p_binomial_bilateral(k: int, n: int, p: float) -> float:
+    """p-valor exacto bilateral de observar ``k`` éxitos en ``n`` con probabilidad ``p``.
+
+    Suma la probabilidad de todos los resultados tan improbables o más que el
+    observado (el criterio habitual del test binomial exacto).
+    """
+    probabilidades = [comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(n + 1)]
+    umbral = probabilidades[k] * (1 + 1e-7)
+    return min(1.0, sum(q for q in probabilidades if q <= umbral))
+
+
+def cola_chi2(x: float, grados: int) -> float:
+    """P(χ² con ``grados`` grados de libertad ≥ x).
+
+    Con grados pares es exacta: e^(−x/2) Σ_{i<g/2} (x/2)^i / i!. Con impares se
+    usa la aproximación de Wilson-Hilferty (sin depender de SciPy).
+    """
+    if grados % 2 == 0:
+        return exp(-x / 2) * sum((x / 2) ** i / factorial(i) for i in range(grados // 2))
+    z = ((x / grados) ** (1 / 3) - (1 - 2 / (9 * grados))) / sqrt(2 / (9 * grados))
+    return 1 - NormalDist().cdf(z)
+
+
+@dataclass(frozen=True)
+class ComparacionCortes:
+    """Corte por posición observado frente al del modelo.
+
+    Atributos:
+        observado: datos reales.
+        modelo: P(corta | le toca hablar) del modelo en cada posición.
+    """
+
+    observado: CortesPorPosicion
+    modelo: tuple[float, ...]
+
+    def posicion(self, p: int, confianza: float = 0.95) -> tuple[Estimacion, float, float]:
+        """(proporción observada con su IC, valor del modelo, p-valor binomial exacto)."""
+        k, n = self.observado.corta[p - 1], self.observado.habla[p - 1]
+        return (Estimacion(k, n, confianza), self.modelo[p - 1],
+                p_binomial_bilateral(k, n, self.modelo[p - 1]))
+
+    def chi2(self) -> tuple[float, int, float]:
+        """Contraste global de Pearson: (χ², grados de libertad, p-valor).
+
+        Cada posición es una binomial con las veces que habló; el modelo está
+        fijado de antemano, así que hay 4 grados de libertad.
+        """
+        x = sum((c - n * q) ** 2 / (n * q * (1 - q))
+                for c, n, q in zip(self.observado.corta, self.observado.habla, self.modelo) if n)
+        return x, 4, cola_chi2(x, 4)
+
+    def pareja(self, posiciones: Sequence[int]) -> tuple[Estimacion, float]:
+        """Corte de una pareja: proporción observada y la que espera el modelo
+        con las mismas veces que habló cada posición."""
+        k = sum(self.observado.corta[p - 1] for p in posiciones)
+        n = sum(self.observado.habla[p - 1] for p in posiciones)
+        esperado = sum(self.observado.habla[p - 1] * self.modelo[p - 1] for p in posiciones)
+        return Estimacion(k, n), esperado / n
+
+    def razon_parejas(self, confianza: float = 0.95) -> tuple[float, tuple[float, float], float]:
+        """Cuántas veces más corta la pareja 2-4 que la 1-3: observado, su IC
+        (método delta sobre el logaritmo) y lo que predice el modelo."""
+        (mano, modelo_mano), (postre, modelo_postre) = self.pareja((1, 3)), self.pareja((2, 4))
+        razon = postre.p / mano.p
+        error = sqrt((1 - mano.p) / mano.exitos + (1 - postre.p) / postre.exitos)
+        z = NormalDist().inv_cdf(0.5 + confianza / 2)
+        return razon, (razon * exp(-z * error), razon * exp(z * error)), modelo_postre / modelo_mano
+
+
+def cortes_del_modelo(reglas: ReglasMus = REGLAS_POR_DEFECTO, factor_corte: float = 1.0
+                      ) -> tuple[float, ...]:
+    """P(corta | le toca hablar) de cada posición en la mesa de rivales razonables ×λ."""
+    from mus.cortar import mesa_rivales_razonables
+
+    mesa = mesa_rivales_razonables(reglas, factor_corte=factor_corte)
+    return tuple(mesa.p_cortar(p) for p in (1, 2, 3, 4))
+
+
+def comparar_cortes(observado: CortesPorPosicion, modelo: Sequence[float]) -> ComparacionCortes:
+    if len(modelo) != 4 or not all(0 < q < 1 for q in modelo):
+        raise ValueError("El modelo debe dar una probabilidad de corte en (0, 1) por posición")
+    return ComparacionCortes(observado, tuple(modelo))

@@ -32,6 +32,7 @@ import argparse
 import sys
 import time
 from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
 
@@ -55,10 +56,14 @@ from mus.analisis import (
 )
 from mus.calibracion import (
     MANOS_RECOMENDADAS,
+    RUTA_CORTES,
     RUTA_DATOS,
     Observacion,
     calibrar,
+    comparar_cortes,
+    cortes_del_modelo,
     curva_hay_mus,
+    leer_cortes,
     leer_observaciones,
 )
 from mus.cartas import parsear_mano
@@ -107,6 +112,7 @@ from mus.web import (
     consultar_datos,
     exportar_datos_web,
     exportar_referencia,
+    factor_corte,
 )
 
 NOMBRE_POSICION = {1: "mano", 2: "segundo", 3: "tercero", 4: "postre"}
@@ -582,6 +588,49 @@ def cmd_calibrar(args: argparse.Namespace) -> None:
     else:
         print(f"Para usarlo: --factor-corte {c.lambda_estimada:.2f} en 'cortar' y 'testigos'. "
               "El valor por defecto (1) no cambia solo.")
+    normal = next(t for t in TIPOS_MESA if t.por_defecto)
+    lam_normal = factor_corte(normal, curva)
+    desde, hasta = c.lambda_intervalo
+    print(f"La mesa «{normal.nombre}» de la web usa λ = {lam_normal:g} "
+          f"({100 * normal.p_hay_mus:.0f} % de mus): "
+          + ("dentro del intervalo de los datos." if desde <= lam_normal <= hasta
+             else "FUERA del intervalo de los datos: conviene revisarla."))
+    if args.manos is None and Path(args.cortes).exists():
+        _imprimir_cortes(args, normal.nombre, lam_normal, observacion)
+
+
+def _imprimir_cortes(args: argparse.Namespace, nombre_mesa: str, lam: float,
+                     observacion: Observacion) -> None:
+    """Corte por posición observado frente al del modelo en la mesa por defecto."""
+    observado = leer_cortes(args.cortes)
+    comparacion = comparar_cortes(observado, cortes_del_modelo(_reglas(args), lam))
+    print(f"\nCorte por posición ({args.cortes}) frente a la mesa «{nombre_mesa}» (λ = {lam:g}); "
+          "P(corta | le toca hablar):")
+    print(f"  {'posición':<10}{'corta/habla':>12}{'observado (IC 95 %)':>24}{'modelo':>9}"
+          f"{'p (binomial)':>14}")
+    for p in POSICIONES:
+        e, modelo, p_valor = comparacion.posicion(p)
+        bajo, alto = e.intervalo
+        print(f"  {NOMBRE_POSICION[p]:<10}{f'{e.exitos}/{e.n}':>12}"
+              f"{f'{100 * e.p:.0f} % ({100 * bajo:.0f}-{100 * alto:.0f} %)':>24}"
+              f"{100 * modelo:>8.0f} %{p_valor:>14.2f}")
+    x, grados, p_valor = comparacion.chi2()
+    print(f"  Contraste global: χ² = {x:.2f} con {grados} g.l., p = {p_valor:.2f} -> "
+          + ("los datos encajan con el modelo." if p_valor >= 0.05
+             else "los datos NO encajan con el modelo (p < 0,05)."))
+    for nombre, posiciones in (("de la mano (1-3)", (1, 3)), ("segundo-postre (2-4)", (2, 4))):
+        e, modelo = comparacion.pareja(posiciones)
+        print(f"  Pareja {nombre}: corta {e.exitos} de {e.n} veces = {100 * e.p:.0f} % "
+              f"(modelo {100 * modelo:.0f} %)")
+    razon, (bajo, alto), razon_modelo = comparacion.razon_parejas()
+    print(f"  La pareja 2-4 corta {razon:.2f} veces más que la 1-3 (IC 95 % {bajo:.2f}-{alto:.2f}); "
+          f"el modelo predice {razon_modelo:.2f}.")
+    if not observado.coherente:
+        print("  AVISO: los datos no son coherentes: cada posición debería hablar tantas veces como "
+              "la anterior menos las que cortó.")
+    elif observado.con_mus != observacion.con_mus or observado.habla[0] != observacion.manos:
+        print(f"  AVISO: no cuadra con {args.datos}: allí hay {observacion.con_mus} manos con mus de "
+              f"{observacion.manos}; aquí, {observado.con_mus} de {observado.habla[0]}.")
 
 
 def cmd_exportar_web(args: argparse.Namespace) -> None:
@@ -793,6 +842,9 @@ def crear_parser() -> argparse.ArgumentParser:
                    help="CSV con columnas sesion,fecha,manos,con_mus,notas.")
     p.add_argument("--manos", type=int, help="Manos observadas (en vez de leer el CSV).")
     p.add_argument("--con-mus", type=int, help="Manos con mus en la primera ronda.")
+    p.add_argument("--cortes", default=str(RUTA_CORTES),
+                   help="CSV con las veces que habla y corta cada posición (columnas "
+                        "fecha,posicion,habla,corta,notas); si existe, se compara con el modelo.")
     p.set_defaults(func=cmd_calibrar)
 
     p = sub.add_parser("exportar-web", help="Genera los datos de la web y los ficheros de "
