@@ -4,36 +4,20 @@ import numpy as np
 import pytest
 
 import mus.cortar as mc
+from mesas_prueba import CORTA_CON_JUEGO, DESCARTE, JUEGO, TABLA, mesa_de
 from mus.__main__ import main
 from mus.cartas import parsear_mano
 from mus.cortar import (
-    MesaConCorte,
     PoliticaCorte,
     SimulacionCorte,
     iterar_corte,
     simular_corte,
     valorar_corte,
 )
-from mus.descarte import OBJETIVOS, construir_tabla_descartes, objetivo_con_pesos
-from mus.equity import TablaEquity, equity
-from mus.evaluacion import Lance
+from mus.descarte import OBJETIVOS, objetivo_con_pesos
+from mus.equity import equity
 from mus.testigos import CASOS_TESTIGO, COMPANERO_FLOJO, COMPANERO_VA_BIEN, comparar
-from mus.tras_mus import equity_simulada, mejor_respuesta, valorar_opciones_simuladas
-
-TD = construir_tabla_descartes()
-TABLA = TD.tabla
-CEROS = np.zeros((TABLA.n_manos, 4, 5))
-_tantos = CEROS.copy()
-_tantos[:, :, list(Lance).index(Lance.JUEGO)] = TABLA.tiene_juego[:, None]
-JUEGO = TablaEquity(TABLA, CEROS, _tantos.copy(), CEROS, _tantos)
-DESCARTE = mejor_respuesta(TD, JUEGO, OBJETIVOS["tantos"])
-CORTA_CON_JUEGO = PoliticaCorte(np.broadcast_to(TABLA.tiene_juego.astype(float), (4, 330)).copy())
-
-
-def mesa_de(corte: PoliticaCorte, n: int = 50_000) -> MesaConCorte:
-    sim = simular_corte(corte, DESCARTE, n, semilla=1)
-    return MesaConCorte(TABLA.reglas, OBJETIVOS["tantos"], corte, DESCARTE, sim,
-                        equity_simulada(sim.mesa, JUEGO), JUEGO, (), True, n, 1)
+from mus.tras_mus import valorar_opciones_simuladas
 
 
 class TestPoliticaCorte:
@@ -108,6 +92,22 @@ class TestValorarCorte:
         assert d.opciones[0].frente_a_la_mejor.media == 0
         medias = [o.valor_mus.media for o in d.opciones]
         assert medias == sorted(medias, reverse=True)
+
+    @pytest.mark.parametrize("posicion", [1, 3, 4])
+    def test_valores_si_hay_mus(self, posicion):
+        """Si hay mus, la diferencia con el mejor descarte es la de dar mus dividida
+        por P(que den mus los que hablan después): E_w[d·X] / E_w[d]."""
+        mesa = mesa_de(CORTA_CON_JUEGO)
+        d = valorar_corte("R C 5 4", posicion, mesa, 20_000, semilla=8)
+        assert d.opciones[0].si_hay_mus_frente_a_la_mejor.media == 0
+        for o in d.opciones:
+            assert o.si_hay_mus_frente_a_la_mejor.media == pytest.approx(
+                o.frente_a_la_mejor.media / d.p_mus_despues, abs=1e-9)
+            if posicion == 4:  # nadie habla después: dar mus = jugar tras el mus
+                assert d.p_mus_despues == 1
+                assert o.si_hay_mus.media == pytest.approx(o.valor_mus.media, abs=1e-9)
+        medias = [o.si_hay_mus.media for o in d.opciones]
+        assert medias == sorted(medias, reverse=True)  # el mismo orden que dar mus
 
     def test_condicion_imposible(self):
         mesa = mesa_de(CORTA_CON_JUEGO)

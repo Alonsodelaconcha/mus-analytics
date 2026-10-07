@@ -204,3 +204,46 @@ def test_tantos_fijos_de_grande():
 def test_con_juego_no_hay_punto():
     x = equity("R C S A", 1).por_lance[Lance.PUNTO]
     assert (x.p_se_juega, x.p_gana_pareja, x.tantos_netos) == (0, 0, 0)
+
+
+# --- Tabla completa con una condición sobre el compañero (señas, Fase 4) --------
+
+
+def _filas_de_equity(e) -> np.ndarray:
+    return np.array([[x.p_se_juega, x.p_gana_individual, x.p_gana_pareja, x.tantos_netos]
+                     for x in e.por_lance.values()])
+
+
+@pytest.mark.parametrize("mano", ["A A 4 5", "R R C S", "7 7 7 S"])
+def test_filas_con_companero_coinciden_con_equity(mano):
+    """Las filas de la tabla condicionada son exactamente las consultas sueltas."""
+    from mus.equity import _filas_equity
+    from mus.reglas import REGLAS_POR_DEFECTO
+    condicion = parsear_condicion("reyes=2, juego=31")
+    filas = _filas_equity(REGLAS_POR_DEFECTO, [TABLA.indice(parsear_mano(mano))],
+                          companero=condicion.mascara(TABLA))
+    for p in POSICIONES:
+        np.testing.assert_array_equal(filas[0, p - 1],
+                                      _filas_de_equity(equity(mano, p, companero=condicion)))
+
+
+def test_filas_con_companero_imposible_quedan_a_nan():
+    from mus.equity import _filas_equity
+    from mus.reglas import REGLAS_POR_DEFECTO
+    # con los cuatro sietes en mi mano, el compañero no puede tener dos sietes
+    filas = _filas_equity(REGLAS_POR_DEFECTO, [TABLA.indice(parsear_mano("7 7 7 7"))],
+                          companero=parsear_condicion("sietes=2").mascara(TABLA))
+    assert np.isnan(filas).all()
+
+
+@pytest.mark.slow
+def test_tabla_completa_con_companero():
+    condicion = parsear_condicion("pares=duples")
+    te = calcular_tabla_equity(companero=condicion)
+    for mano, p in (("R R C 5", 1), ("A A 4 5", 4)):
+        i = TABLA.indice(parsear_mano(mano))
+        e = equity(mano, p, companero=condicion)
+        for lance in Lance:
+            assert te.de(i, p, lance) == e.por_lance[lance]
+    # la tabla sin condición es otra (la caché distingue la condición)
+    assert not np.array_equal(te.gana_pareja, calcular_tabla_equity().gana_pareja)

@@ -114,7 +114,7 @@ python -m mus calibrar
 
 Sintaxis: cláusulas separadas por comas, que se combinan con "y". Por ejemplo: `sin_pares`, `con_pares`, `sin_juego`, `pares>=medias`, `pares=duples`, `juego=31`, `suma>=28`, `reyes>=2`, `ases<=1`.
 
-Otros comandos: `distribucion`, `verificar`, `ranking`, `mesa`, `equity-tabla` (exporta CSV/JSON), `descarte-tabla`, `corte-mesa` y gráficas (`grafica`, `grafica-posicion`, `grafica-condicion`). `python -m mus <comando> --help` describe cada uno.
+Otros comandos: `distribucion`, `verificar`, `ranking`, `mesa`, `equity-tabla` (exporta CSV/JSON), `descarte-tabla`, `corte-mesa`, `exportar-web` y `consultar-web` (datos de la web, ver [docs/plan_fase4.md](docs/plan_fase4.md)) y gráficas (`grafica`, `grafica-posicion`, `grafica-condicion`). `python -m mus <comando> --help` describe cada uno.
 
 Algunos cálculos tardan entre uno y varios minutos la primera vez y se guardan en `resultados/cache/`; las siguientes veces son inmediatos.
 
@@ -150,6 +150,8 @@ El primero lanza los tests rápidos (unos segundos). El segundo, las verificacio
 | `tras_mus.py` | La mesa tras el mus: políticas de descarte, simulación de la ronda y equilibrio |
 | `cortar.py` | Cortar o dar mus con el efecto de selección |
 | `calibracion.py`, `testigos.py` | Calibración con partidas reales y casos testigo |
+| `senas.py` | Señas del compañero, libres y combinables |
+| `web.py` | Datos precalculados para la web y ficheros de referencia del núcleo en TypeScript |
 | `analisis.py` | Exportación a CSV y JSON, rankings y gráficas |
 
 La documentación de diseño está en [docs/decisiones.md](docs/decisiones.md): cada decisión importante, sus alternativas y los errores encontrados por el camino.

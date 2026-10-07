@@ -1,6 +1,6 @@
-# Propuesta de plan para la Fase 4 (web, MVP)
+# Plan de la Fase 4 (web, MVP)
 
-Fecha: 2026-10-07. Propuesta pendiente de confirmación por el usuario.
+Fecha: 2026-10-07. **Aprobado** por el usuario con las respuestas del final; los cambios respecto a la propuesta original están en la última sección.
 
 **Idea general.** El motor en Python sigue siendo la referencia y genera todos los datos. La web solo los consulta y hace las cuentas ligeras. Así no hay que portar al navegador lo difícil y no hay riesgo de que las dos versiones den números distintos.
 
@@ -56,3 +56,19 @@ Siempre visible pero discreto: "ⓘ Cifras sin apostar (en paso)", que al tocarl
 5. **Repositorio:** GitHub Pages gratuito exige que el repositorio sea público. ¿Lo vas a publicar así? ¿Tienes nombre para la web y dirección de GitHub?
 6. **Sin conexión:** ¿quieres que se pueda instalar y usar sin cobertura (útil en el bar)? Añade poco trabajo.
 7. **Idioma:** ¿solo castellano?
+
+## Respuestas del usuario (2026-10-07)
+
+1. **Señas:** en el MVP solo afectan a la probabilidad de ganar; en "¿mus o corto?" serán lo primero de la versión 2. Son libres y combinables (ver `docs/decisiones.md` y `src/mus/senas.py`). La web incluirá una chuleta con los gestos.
+2. **Tipos de mesa:** los tres niveles propuestos, con "Normal" por defecto.
+3. **Variante:** solo 8 reyes.
+4. **Tecnología:** React + TypeScript + Vite. Lo programa todo Claude, priorizando la calidad.
+5. **Nombre:** Mus Analytics. El repositorio se hará público en el paso de publicación (hay que avisar al usuario en ese momento).
+6. **Sin conexión:** sí, instalable y usable sin conexión.
+7. **Idioma:** solo castellano.
+
+## Cambios respecto a la propuesta
+
+- **Señas combinables.** En vez de un fichero por seña, uno por cada conjunto distinto de manos que pueden dejar las señas: 16 (las 11 señas sueltas y 5 combinaciones). Cualquier otra combinación coincide con una de ellas o es imposible.
+- **"¿Mus o corto?" mano a mano.** En vez de leer la decisión de la simulación agregada de la mesa (con poca precisión en las manos raras), cada mano y posición se simula con sus cartas fijas, como `python -m mus cortar`. Cuesta más tiempo de cálculo (una vez), pero la precisión no depende de lo rara que sea la mano y el descarte es la mejor respuesta de esa mano.
+- **Valor de cada descarte precalculado.** Sale de la misma simulación, sabiendo que hay mus. El navegador solo calcula la distribución exacta de la mano final (P(pares), P(juego)...), que es exacta y barata.

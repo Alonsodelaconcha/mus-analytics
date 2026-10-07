@@ -430,6 +430,14 @@ class OpcionTrasMus:
     valor_mus: EstimacionMedia
     """Valor de dar mus y descartarse así (incluye la probabilidad de que otro corte)."""
     frente_a_la_mejor: EstimacionMedia
+    si_hay_mus: EstimacionMedia | None = None
+    """Tantos esperados si llega a haber mus y me descarto así: solo los repartos
+    en que dan mus todos, cada uno con su probabilidad. Es lo que importa en el
+    momento de descartarse. ``None`` si nunca llega a haber mus."""
+    si_hay_mus_frente_a_la_mejor: EstimacionMedia | None = None
+    """Lo mismo, menos el mejor descarte, reparto a reparto. Su media es
+    ``frente_a_la_mejor`` dividida por la probabilidad de que den mus los que
+    hablan después (ver :class:`DecisionCorte`)."""
 
 
 @dataclass(frozen=True)
@@ -539,12 +547,24 @@ def valorar_corte(
         raise ValueError("Con estas políticas (y condición), nunca se llega a esa decisión")
     despues = np.concatenate(despues_todos)
     t_ini = np.concatenate(t_ini_todos)
-    valores = [despues * np.concatenate(t) + (1 - despues) * t_ini for t in t_mus]
+    t_mus_todos = [np.concatenate(t) for t in t_mus]
+    valores = [despues * t + (1 - despues) * t_ini for t in t_mus_todos]
     medias = [float((w * v).sum() / w.sum()) for v in valores]
     mejor = int(np.argmax(medias))
+    # Si llega a haber mus, cada reparto pesa por la probabilidad de llegar a
+    # hablar y de que den mus todos los que hablan después. El mejor descarte
+    # es el mismo: valores_i solo depende de la opción a través de despues·T_mus.
+    w_mus = w * despues
+    hay_mus = w_mus.sum() > 0
+
+    def si_hay_mus(x: np.ndarray) -> EstimacionMedia | None:
+        return _media_ponderada(x, w_mus, confianza) if hay_mus else None
+
     opciones_valoradas = sorted(
         (OpcionTrasMus(o, _media_ponderada(valores[i], w, confianza),
-                       _media_ponderada(valores[i] - valores[mejor], w, confianza))
+                       _media_ponderada(valores[i] - valores[mejor], w, confianza),
+                       si_hay_mus(t_mus_todos[i]),
+                       si_hay_mus(t_mus_todos[i] - t_mus_todos[mejor]))
          for i, o in enumerate(opciones)),
         key=lambda x: -x.valor_mus.media)
     informacion = "sin información" if companero is None else f"compañero: {companero}"

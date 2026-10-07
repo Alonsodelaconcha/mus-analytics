@@ -400,18 +400,30 @@ class TablaEquity:
 _METRICAS = ("p_se_juega", "p_gana_individual", "p_gana_pareja", "tantos_netos")
 
 
-def _filas_equity(reglas: ReglasMus, heroes: list[int], pesos: np.ndarray | None = None
-                  ) -> np.ndarray:
+def _filas_equity(reglas: ReglasMus, heroes: list[int], pesos: np.ndarray | None = None,
+                  companero: np.ndarray | None = None) -> np.ndarray:
     """Equity de varias manos: array (manos, posiciones, lances, métricas).
 
-    Es una función de módulo para poder ejecutarse en otro proceso.
+    Es una función de módulo para poder ejecutarse en otro proceso. Por eso
+    ``companero`` es la máscara (una entrada por mano) de una condición sobre
+    el compañero, y no una :class:`Condicion`: las condiciones contienen
+    funciones anónimas, que no se pueden enviar a otro proceso. Si la
+    condición es imposible con la mano del héroe (no quedan cartas para
+    cumplirla), su fila queda a NaN.
     """
     tabla = construir_tabla(reglas)
+    condicion = (None if companero is None
+                 else Condicion("condición sobre el compañero", lambda t: companero))
     resultado = np.zeros((len(heroes), len(POSICIONES), len(Lance), len(_METRICAS)))
     for i, h in enumerate(heroes):
         ctx = _Contexto(tabla, h)  # se reutiliza en las 4 posiciones
         for p in POSICIONES:
-            por_lance = _equity_con_contexto(ctx, tabla, h, p, None, None, pesos).por_lance
+            try:
+                por_lance = _equity_con_contexto(ctx, tabla, h, p, condicion, None,
+                                                 pesos).por_lance
+            except ValueError:  # condición imposible con esta mano
+                resultado[i, p - 1] = np.nan
+                continue
             for l, e in enumerate(por_lance.values()):
                 resultado[i, p - 1, l] = [getattr(e, m) for m in _METRICAS]
     return resultado
@@ -419,7 +431,8 @@ def _filas_equity(reglas: ReglasMus, heroes: list[int], pesos: np.ndarray | None
 
 def calcular_tabla_equity(reglas: ReglasMus = REGLAS_POR_DEFECTO,
                           procesos: int | None = None,
-                          pesos: np.ndarray | None = None) -> TablaEquity:
+                          pesos: np.ndarray | None = None,
+                          companero: Condicion | None = None) -> TablaEquity:
     """Calcula (y cachea en memoria) la equity de todas las manos en todas las posiciones.
 
     Args:
@@ -428,25 +441,32 @@ def calcular_tabla_equity(reglas: ReglasMus = REGLAS_POR_DEFECTO,
             y más procesos no aceleran (medido: 1 → 83 s, 4 → 43 s, 8 → 45 s).
         pesos: array (4, manos) que reponderan las manos de los demás asientos
             (ver :func:`equity`). ``None`` = reparto inicial uniforme.
+        companero: condición sobre la mano del compañero (p. ej. sus señas)
+            en todas las posiciones. Las manos del héroe con las que es
+            imposible quedan a NaN.
     """
     clave_pesos = None if pesos is None else np.ascontiguousarray(pesos, np.float64).tobytes()
-    return _calcular_tabla_equity(reglas, procesos or min(4, os.cpu_count() or 1), clave_pesos)
+    clave_companero = (None if companero is None
+                       else companero.mascara(construir_tabla(reglas)).tobytes())
+    return _calcular_tabla_equity(reglas, procesos or min(4, os.cpu_count() or 1), clave_pesos,
+                                  clave_companero)
 
 
 @lru_cache(maxsize=8)
-def _calcular_tabla_equity(reglas: ReglasMus, procesos: int, clave_pesos: bytes | None
-                           ) -> TablaEquity:
+def _calcular_tabla_equity(reglas: ReglasMus, procesos: int, clave_pesos: bytes | None,
+                           clave_companero: bytes | None) -> TablaEquity:
     tabla = construir_tabla(reglas)
     pesos = (None if clave_pesos is None
              else np.frombuffer(clave_pesos, np.float64).reshape(len(POSICIONES), -1))
+    companero = None if clave_companero is None else np.frombuffer(clave_companero, dtype=bool)
     heroes = list(range(tabla.n_manos))
     if procesos == 1:
-        datos = _filas_equity(reglas, heroes, pesos)
+        datos = _filas_equity(reglas, heroes, pesos, companero)
     else:
         bloques = [heroes[i::procesos * 4] for i in range(procesos * 4)]  # bloques equilibrados
         with ProcessPoolExecutor(max_workers=procesos) as ejecutor:
             partes = list(ejecutor.map(_filas_equity, [reglas] * len(bloques), bloques,
-                                       [pesos] * len(bloques)))
+                                       [pesos] * len(bloques), [companero] * len(bloques)))
         datos = np.zeros((tabla.n_manos, len(POSICIONES), len(Lance), len(_METRICAS)))
         for bloque, parte in zip(bloques, partes):
             datos[bloque] = parte
@@ -466,25 +486,29 @@ VERSION_MOTOR = "2"
 
 def cargar_tabla_equity(reglas: ReglasMus = REGLAS_POR_DEFECTO,
                         directorio: str | Path = "resultados/cache",
-                        pesos: np.ndarray | None = None) -> TablaEquity:
+                        pesos: np.ndarray | None = None,
+                        companero: Condicion | None = None) -> TablaEquity:
     """Como :func:`calcular_tabla_equity`, pero guarda el resultado en disco.
 
-    El fichero se nombra con un hash de las reglas, de los pesos y de
-    :data:`VERSION_MOTOR`, así que cambiar cualquiera de ellos obliga a recalcular.
+    El fichero se nombra con un hash de las reglas, de los pesos, de la
+    condición sobre el compañero (su máscara) y de :data:`VERSION_MOTOR`, así
+    que cambiar cualquiera de ellos obliga a recalcular.
     """
     # Las reglas del descarte no afectan a la equity de una mano servida: se
     # normalizan para que cambiarlas no obligue a recalcular la tabla.
     relevantes = replace(reglas, descarte=ReglasDescarte())
+    tabla = construir_tabla(reglas)
     texto = f"{relevantes!r}|{VERSION_MOTOR}"
     if pesos is not None:
         texto += "|" + hashlib.sha256(np.ascontiguousarray(pesos, np.float64).tobytes()).hexdigest()
+    if companero is not None:
+        texto += "|compañero " + hashlib.sha256(companero.mascara(tabla).tobytes()).hexdigest()
     huella = hashlib.sha256(texto.encode()).hexdigest()[:16]
     ruta = Path(directorio) / f"equity_{huella}.npz"
-    tabla = construir_tabla(reglas)
     if ruta.exists():
         with np.load(ruta) as f:
             return _tabla_equity_de_arrays(tabla, f["datos"])
-    te = calcular_tabla_equity(reglas, pesos=pesos)
+    te = calcular_tabla_equity(reglas, pesos=pesos, companero=companero)
     ruta.parent.mkdir(parents=True, exist_ok=True)
     datos = np.stack([te.se_juega, te.gana_individual, te.gana_pareja, te.tantos_netos], axis=-1)
     np.savez_compressed(ruta, datos=datos)

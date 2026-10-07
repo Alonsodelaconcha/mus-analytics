@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Datos generados con `python -m mus exportar-web`: no se editan a mano
+web/public/datos/** linguist-generated=true
+web/test/referencia/** linguist-generated=true

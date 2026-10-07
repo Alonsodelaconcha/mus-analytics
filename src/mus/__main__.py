@@ -19,6 +19,9 @@ Ejemplos::
     python -m mus grafica-posicion --salida resultados/posicion.png
     python -m mus grafica-condicion "R R C 5" --companero "sin_pares" --salida resultados/c.png
 
+    python -m mus exportar-web                           # datos de la web (Fase 4)
+    python -m mus consultar-web "R C 5 4" --posicion 1 --mesa normal --senas "dos-reyes"
+
 Las condiciones van SIEMPRE entre comillas: en PowerShell (y en cualquier
 shell) los caracteres > y < redirigen la salida a un fichero.
 """
@@ -93,6 +96,17 @@ from mus.tras_mus import (
     simular_ronda_mus,
     valorar_opciones_simuladas,
     verificar_mesa,
+)
+from mus.web import (
+    DIRECTORIO_DATOS,
+    DIRECTORIO_REFERENCIA,
+    N_DECISION,
+    N_REFINADO,
+    TIPOS_MESA,
+    comprobar_manifiesto,
+    consultar_datos,
+    exportar_datos_web,
+    exportar_referencia,
 )
 
 NOMBRE_POSICION = {1: "mano", 2: "segundo", 3: "tercero", 4: "postre"}
@@ -570,6 +584,56 @@ def cmd_calibrar(args: argparse.Namespace) -> None:
               "El valor por defecto (1) no cambia solo.")
 
 
+def cmd_exportar_web(args: argparse.Namespace) -> None:
+    reglas = _reglas(args)
+    inicio = time.perf_counter()
+    for ruta in exportar_referencia(args.referencia, reglas):
+        print(f"Referencia: {ruta} ({ruta.stat().st_size / 1024:.0f} KB)")
+    if args.solo_referencia:
+        return
+    print("Datos de la web. La primera vez tarda bastante (tablas de equity con señas y "
+          "simulación mano a mano de cada tipo de mesa); después sale de resultados/cache.",
+          flush=True)
+    escritos = exportar_datos_web(args.salida, reglas, n=args.n, n_refinado=args.n_refinado,
+                                  procesos=args.procesos,
+                                  informar=lambda s: print(s, flush=True))
+    total = sum(r.stat().st_size for r in escritos)
+    print(f"\n{len(escritos)} ficheros en {args.salida} ({total / 1024:.0f} KB sin comprimir) "
+          f"en {time.perf_counter() - inicio:.0f} s.")
+    problemas = comprobar_manifiesto(args.salida)
+    print("Manifiesto comprobado: todas las huellas coinciden." if not problemas
+          else "PROBLEMAS: " + "; ".join(problemas))
+
+
+def cmd_consultar_web(args: argparse.Namespace) -> None:
+    senas = [s.strip() for s in args.senas.split(",") if s.strip()] if args.senas else []
+    c = consultar_datos(args.datos, args.mano, args.posicion, args.mesa, senas)
+    print(f"{c.mano} en posición {c.posicion} ({NOMBRE_POSICION[c.posicion]}); mesa {c.mesa}; "
+          f"señas del compañero: {', '.join(c.senas) or 'ninguna (sin información)'}")
+    print("\nSi se juega con estas cartas (reparto inicial, exacto):")
+    print(f"  {'lance':<8}{'se juega':>10}{'gano yo':>10}{'pareja':>10}{'tantos':>10}")
+    for lance, e in c.equity.items():
+        if e["se_juega"] is None:
+            print(f"  {lance:<8}  imposible: ninguna mano del compañero cumple esas señas")
+            continue
+        print(f"  {lance:<8}{e['se_juega']:>10.4f}{e['gana_individual']:>10.4f}"
+              f"{e['gana_pareja']:>10.4f}{e['tantos']:>+10.3f}")
+    d = c.decision
+    if d["ventaja"] is None:
+        print("\nSin decisión precalculada para esta mano.")
+        return
+    nombre = {1: "DAR MUS", -1: "CORTAR", 0: "INDIFERENTE"}[int(d["decision"])]
+    print(f"\n¿Mus o corto? {nombre}: dar mus - cortar = {d['ventaja']:+.3f} ± {d['radio']:.3f} "
+          f"tantos por mano (IC 95 %; {int(d['repartos'])} repartos; P(que den mus los que "
+          f"hablan después) = {d['p_mus_despues']:.3f})")
+    print("Si hay mus, cada descarte (tantos esperados; frente al mejor, IC 95 %):")
+    for o in c.opciones:
+        if o["si_hay_mus"] is None:
+            continue
+        print(f"  me quedo {o['me_quedo']:<10}{o['si_hay_mus']:>+8.3f}   "
+              f"{o['diferencia']:+.3f} ± {o['radio']:.3f}")
+
+
 def _ventaja(d: DecisionCorte) -> str:
     v = d.ventaja_mus
     return f"{d.decision:<12}{v.media:+.3f} [{v.intervalo[0]:+.3f}, {v.intervalo[1]:+.3f}]"
@@ -731,6 +795,32 @@ def crear_parser() -> argparse.ArgumentParser:
     p.add_argument("--con-mus", type=int, help="Manos con mus en la primera ronda.")
     p.set_defaults(func=cmd_calibrar)
 
+    p = sub.add_parser("exportar-web", help="Genera los datos de la web y los ficheros de "
+                                             "referencia del núcleo en TypeScript (Fase 4).")
+    p.add_argument("--salida", default=str(DIRECTORIO_DATOS), help="Directorio de los datos.")
+    p.add_argument("--referencia", default=str(DIRECTORIO_REFERENCIA),
+                   help="Directorio de los ficheros de referencia.")
+    p.add_argument("--n", type=int, default=N_DECISION,
+                   help="Repartos simulados por mano y posición para decidir si cortar.")
+    p.add_argument("--n-refinado", type=int, default=N_REFINADO,
+                   help="Repartos con que se repiten las decisiones indiferentes.")
+    p.add_argument("--procesos", type=int, default=None,
+                   help="Procesos en paralelo (por defecto, núcleos − 2, hasta 6).")
+    p.add_argument("--solo-referencia", action="store_true",
+                   help="Solo los ficheros de referencia (unos segundos).")
+    p.set_defaults(func=cmd_exportar_web)
+
+    p = sub.add_parser("consultar-web", help="Lo que enseñará la web para una mano, leído de "
+                                              "los ficheros exportados (para comprobarlos).")
+    p.add_argument("mano", help='Mano, p. ej. "R C 5 4".')
+    p.add_argument("--posicion", type=int, choices=POSICIONES, default=1)
+    p.add_argument("--mesa", choices=[t.id for t in TIPOS_MESA],
+                   help="Tipo de mesa (por defecto, la de por defecto de la web).")
+    p.add_argument("--senas", help='Señas del compañero separadas por comas, ENTRE COMILLAS, '
+                                   'p. ej. "dos-reyes,31".')
+    p.add_argument("--datos", default=str(DIRECTORIO_DATOS), help="Directorio de los datos.")
+    p.set_defaults(func=cmd_consultar_web)
+
     p = sub.add_parser("grafica-posicion", help="Equity siendo mano frente a postre.")
     p.add_argument("--salida", required=True)
     p.set_defaults(func=cmd_grafica_posicion)
@@ -777,7 +867,17 @@ def crear_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _salida_en_utf8() -> None:
+    """Escribe en UTF-8 si la salida no lo es (p. ej. redirigida a un fichero en
+    Windows, que usa cp1252 y no tiene «λ» ni «≈»). La consola no se toca."""
+    for flujo in (sys.stdout, sys.stderr):
+        codificacion = (getattr(flujo, "encoding", None) or "").lower().replace("-", "")
+        if codificacion != "utf8" and hasattr(flujo, "reconfigure"):
+            flujo.reconfigure(encoding="utf-8")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    _salida_en_utf8()
     args = crear_parser().parse_args(argv)
     try:
         args.func(args)

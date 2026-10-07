@@ -237,3 +237,113 @@ Definiciones usadas para preguntar al compañero, sobre su mano inicial:
 **No cambia nada por sí solo.** A 2026-10-07 hay 7 manos, con mus en 2: un 29 %, con intervalo del 8 % al 64 %. Eso corresponde a λ ≈ 0,65, con un intervalo de 0,26 a 1. Es demasiado ancho para decidir. Con 40-50 manos se ejecutará `python -m mus calibrar` y se decidirá con el usuario si cambia el λ por defecto.
 
 **Limitación.** λ resume en un único número cómo cortan los jugadores. Los jugadores reales no cortan exactamente como los rivales razonables escalados: influyen el marcador, las señas y el estilo. Es una calibración gruesa del escenario.
+
+## 2026-10-07 · Fase 4: plan aprobado y respuestas del usuario
+
+| Tema | Decisión |
+|---|---|
+| Señas | En el MVP solo cambian la probabilidad de ganar, no "¿mus o corto?". Que cuenten también ahí será lo primero de la versión 2. La web incluirá una chuleta con los gestos. |
+| Tipos de mesa | Los tres niveles propuestos ("Se da mucho mus", "Normal", "Se corta mucho"), con "Normal" por defecto. |
+| Variante | Solo 8 reyes. |
+| Tecnología | React + TypeScript + Vite. Lo programa todo Claude, priorizando la calidad. |
+| Nombre y repositorio | Mus Analytics. El usuario hará público el repositorio en el paso de publicación; hay que avisarle en ese momento. |
+| Sin conexión | Instalable y usable sin conexión (PWA). |
+| Idioma | Solo castellano. |
+
+## 2026-10-07 · Fase 4: las señas
+
+**Regla de la mesa del usuario.** Las señas son libres: el compañero puede hacer una, varias o ninguna. Cada seña significa "tengo al menos esto", y si hace varias, cumple todas: se combinan con "y". De las señas que **no** hace no se saca ninguna conclusión, porque puede tener la jugada y no haberla pasado. Por eso no hay opción "Ninguna seña": equivaldría a "sin información".
+
+| Seña | Cartas (en 8 reyes, el 3 es rey y el 2 es as) | Gesto |
+|---|---|---|
+| Dos reyes | Exactamente dos reyes | Morderse el labio inferior |
+| Tres reyes | Exactamente tres reyes, también el solomillo | Morderse el lateral del labio inferior |
+| Dos ases | Exactamente dos ases | Sacar la punta de la lengua |
+| Tres ases | Exactamente tres ases | Sacar la lengua de lado |
+| Medias | Tres cartas iguales, también de reyes o de ases | Torcer la boca cerrada hacia un lado |
+| Duples | Dos parejas o cuatro iguales | Levantar las cejas |
+| 31 | Suma exactamente 31 | Guiñar un ojo |
+| Solomillo | Tres reyes y un as | Dar un beso simulado |
+| Ciego | Sin pares ni juego, con cualquier punto | Cerrar los ojos |
+| 30 al punto | Sin pares ni juego, suma 30 | Levantar ambos hombros |
+| 29 al punto | Sin pares ni juego, suma 29 | Levantar un hombro |
+
+La primera versión que pasó el usuario tenía exclusiones ("tres reyes" sin solomillo, "medias" sin reyes ni ases, "ciego" sin 29 ni 30) para que el compañero hiciera solo la seña más concreta. Al listarle los solapamientos que quedaban (dos reyes y 31, duples y dos reyes o dos ases, medias y 31), decidió quitarlas todas y aplicar la regla de las señas libres. Interpretación de Claude, coherente con las reglas del juego: "medias" son exactamente tres iguales, porque cuatro iguales son duples.
+
+**Consecuencia: 16 conjuntos de manos distintos.** Como la probabilidad de ganar condicionada solo depende del conjunto de manos que cumplen las señas, muchas combinaciones dan exactamente lo mismo. Hay 30 combinaciones posibles, pero solo 16 conjuntos distintos (`senas.grupos_de_senas`):
+- las 11 señas sueltas;
+- y 5 combinaciones: dos reyes + dos ases (solo R R A A), dos reyes + duples, dos reyes + 31, dos ases + duples y medias + 31.
+
+El resto coinciden con uno de ellos. Por ejemplo, "tres reyes + medias" es "tres reyes", cualquier combinación con el solomillo es el solomillo y "ciego + 30 al punto" es "30 al punto". Las demás combinaciones son imposibles: ninguna mano cumple más de cuatro señas a la vez (R R R A cumple tres reyes, medias, 31 y solomillo).
+
+**Por eso se precalculan todas, de forma exacta.** 16 tablas completas de equity con el motor de la Fase 2 (`calcular_tabla_equity(companero=...)`) cuestan una media hora, una sola vez. La alternativa era portar el motor exacto a TypeScript para calcular en el móvil (unos 50 MB de memoria y algunas décimas de segundo por consulta). Se descartó para el MVP: es la parte más delicada del motor, y con 16 conjuntos no hace falta.
+
+**Idea para la versión 2, a petición del usuario: "modo torneo".** Señas obligatorias y completas, como en los reglamentos de Euskadi: con dos reyes y 31 hay que pasar la 31, y el ciego no se puede pasar con 29 ni con pares. En ese modo, que el compañero no haga una seña también da información, y entonces sí tiene sentido la opción "Ninguna seña".
+
+## 2026-10-07 · Fase 4, paso 1: exportador de datos y ficheros de referencia
+
+**`python -m mus exportar-web`** escribe dos cosas:
+- `web/public/datos`: los datos que se publican con la web.
+- `web/test/referencia`: los ficheros con los que se comprobará que el núcleo en TypeScript da lo mismo que Python.
+
+Los datos se versionan en git, porque generarlos lleva más de media hora la primera vez y la publicación automática solo debe construir la web. `.gitattributes` los marca como generados.
+
+| Fichero | Contenido | Cálculo |
+|---|---|---|
+| `equity/reparto.json` | Probabilidad de ganar cada lance y tantos esperados, por mano y posición, sin información | Exacto (Fase 2) |
+| `equity/<señas>.json` (16) | Lo mismo sabiendo las señas del compañero | Exacto (Fase 2 con condición) |
+| `mesa-<tipo>.json` (3) | ¿Mus o corto?, el valor de cada descarte si hay mus y la equity de la mesa tras el mus | Simulación (3c) |
+| `manifiesto.json` | Versiones, reglas, escalas, orden de los arrays, señas con sus manos, tipos de mesa y huella SHA-256 de cada fichero | — |
+
+**"¿Mus o corto?" mano a mano, no con la tabla agregada.** La propuesta era leer la decisión de la simulación de la mesa, que acumula la ventaja del mus por asiento y mano inicial. Su precisión depende de lo frecuente que sea la mano: 4 4 4 4 sale una vez de cada 91 390 repartos, así que en 20 millones de repartos tendría unos 200 casos por asiento, con un error típico de unos 0,2 tantos. En su lugar, cada mano y posición se simula con sus cartas fijas (`cortar.valorar_corte`, lo mismo que `python -m mus cortar`). Ventajas:
+- la precisión no depende de lo rara que sea la mano;
+- el descarte es la mejor respuesta de esa mano, con sus propios descartes fuera del mazo;
+- la web dice exactamente lo mismo que la CLI.
+
+Cuesta 1 320 simulaciones por tipo de mesa, en paralelo y una sola vez.
+
+**Refinamiento en dos etapas.** Cada caso se simula con 100 000 repartos. Si la decisión queda indiferente (el IC 95 % de la ventaja contiene el 0), se repite **desde cero** con 400 000 y otra semilla, y se usa solo el segundo cálculo. Elegir qué casos se repiten mirando el primero no sesga el segundo, porque es independiente. Repetir solo lo dudoso concentra el cálculo donde la decisión está en el filo.
+
+**El valor de cada descarte se da "sabiendo que hay mus".** `valorar_corte` valora cada descarte como valor de *dar mus*: incluye los repartos en que alguien corta después y se juega con las manos iniciales. Al descartarse, en cambio, el mus ya se ha dado. Por eso se añaden a cada opción `si_hay_mus` y `si_hay_mus_frente_a_la_mejor`: los mismos repartos, pesados por la probabilidad de que den mus todos (w·d en vez de w). El mejor descarte es el mismo, y la diferencia con el mejor es la anterior dividida por P(que den mus los que hablan después). Hay un test que comprueba esa identidad.
+
+**Tipos de mesa por la frecuencia de mus, no por λ.** Lo que un jugador puede observar es cuántas manos acaban en mus, así que cada nivel se define por eso y su λ se obtiene invirtiendo la curva P(hay mus | λ) de la calibración:
+- "Se da mucho mus": 60 %.
+- "Normal": 30 %, como las primeras partidas del usuario.
+- "Se corta mucho": λ = 1, los rivales razonables (11,5 %).
+
+Cuando haya 40-50 manos anotadas, el 30 % de "Normal" se cambiará por el calibrado.
+
+**Formato.**
+- Enteros escalados: probabilidades ×10 000 y tantos ×1 000. Son más compactos que los decimales y conservan más precisión de la que se muestra.
+- Arrays planos con el orden indicado en cada fichero. Las manos van en el orden canónico (por código), y el manifiesto incluye sus textos para que la web compruebe al cargar que su orden es el mismo. Las opciones de descarte van en el orden de `opciones_descarte`, con sus códigos en el manifiesto.
+- `null` = no disponible (señas imposibles con la mano del héroe, o casos no calculados).
+- La decisión se exporta como código (1 / −1 / 0) y no se deduce en la web de la ventaja y su radio, porque al redondear podría cambiar en los casos límite.
+- `allow_nan=False`: un NaN olvidado hace fallar la exportación en vez de producir un JSON inválido.
+- `web.FORMATO` versiona la estructura; `web.VERSION_DECISIONES`, el cálculo.
+
+**Ficheros de referencia, comparables sin redondeos.**
+- `evaluacion.json`: las 330 manos (conteos, código, combinaciones, suma, pares, tantos y fuerza en cada lance) y 36 entradas de texto, válidas e inválidas, con lo que hace Python al leerlas.
+- `lances.json`: 12 repartos especiales (empates en todas las posiciones, nadie con pares o juego, punto, duples...) y 3 000 aleatorios. Se resuelven con `resolver_mano`, la versión escalar, que no usa las tablas.
+- `descartes.json`: las 3 546 opciones de descarte en orden canónico. La distribución de la mano final se da con **numeradores enteros** sobre C(36, cartas pedidas), así que TypeScript tiene que acertar exactamente, no a 1e-9. Guardar la distribución completa de todas las opciones ocuparía varios MB. En su lugar, cada opción lleva los totales por jugada y dos **huellas**: Σ numerador · peso, con pesos pseudoaleatorios fijos. Cualquier diferencia en cualquier mano final cambia la huella. Los pesos son < 2²⁰, de modo que las sumas (< 2·10¹³) son exactas en la doble precisión de JavaScript. Además, para 22 manos (234 opciones) se da la distribución completa.
+
+**Reproducible.** Cada caso usa una semilla propia derivada de la mano y la posición, así que el resultado no depende del número de procesos (hay un test que lo comprueba). Regenerar los datos da los mismos ficheros, salvo la fecha del manifiesto.
+
+**`python -m mus consultar-web`** lee los ficheros exportados, sin usar el motor salvo para leer la mano, y enseña lo que verá la web para una mano, posición, mesa y señas. Sirve para comparar los datos con `mus equity` y `mus cortar`.
+
+**Resultado de la exportación (2026-10-07).** 33 minutos con 6 procesos la primera vez; desde la caché, 3 segundos.
+
+| Tipo de mesa | λ | P(hay mus) | Decisiones repetidas | Siguen indiferentes | IC 95 % medio |
+|---|---|---|---|---|---|
+| Se da mucho mus | 0,29 | 60,4 % | 32 de 1 320 | 12 (\|ventaja\| ≤ 0,014) | ±0,027 tantos |
+| Normal | 0,63 | 30,1 % | 37 | 14 (≤ 0,018) | ±0,026 |
+| Se corta mucho | 1 | 11,5 % | 34 | 13 (≤ 0,025) | ±0,035 |
+
+Las que siguen indiferentes tras 400 000 repartos valen lo mismo en la práctica: la diferencia es de menos de 3 centésimas de tanto. Con R C 5 4 de mano, por ejemplo, la decisión cambia con la mesa: dar mus gana +0,82 con mucho mus y +0,28 en la normal, y cortar es mejor si se corta mucho (−0,07).
+
+Tamaño: 21 ficheros, 2,9 MB sin comprimir y **682 KB con gzip** (la propuesta estimaba 1-2 MB sin comprimir; las señas combinables y los descartes de cada mano suman más, pero comprimen bien).
+
+**Verificación de los datos exportados:**
+- Con señas, `consultar-web` da las mismas cifras que `mus equity` con la condición equivalente.
+- 24 casos al azar por tipo de mesa, simulados de nuevo con otra semilla: las diferencias normalizadas (z) tienen media ≈ 0 y desviación típica ≈ 1, como deben. El máximo es |z| = 2,2, por debajo del umbral de 4,35 (99,9 % global con Bonferroni).
+- Los 16 casos testigo en la mesa "Se corta mucho" reproducen las cifras de la Fase 3c.
+- Regenerar desde la caché en otra carpeta da ficheros idénticos.
