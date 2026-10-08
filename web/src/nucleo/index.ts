@@ -11,4 +11,5 @@ export * from "./datos";
 export * from "./descarte";
 export * from "./evaluacion";
 export * from "./senas";
+export * from "./sha256";
 export * from "./tablas";

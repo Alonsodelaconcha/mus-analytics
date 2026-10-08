@@ -82,7 +82,7 @@ CLI (`python -m mus ...`): `evaluar`, `resolver`, `distribucion`, `verificar`, `
 
 Entorno y tests:
 - Python 3.14 en `.venv` (`pip install -e ".[dev]"`). Las salidas generadas van a `resultados/` (ignorado por git).
-- Web: Node 24 y npm 11. En `web/`: `npm ci`, `npm run verificar` (tipos + lint + tests), `npm run dev`, `npm run build`. Para verla en el navegador del panel: `.claude/launch.json` (local, excluido de git en `.git/info/exclude`). En el móvil por la red local: `npm run movil` o `npm run movil-final` (el cortafuegos de Windows tiene que permitir Node.js; la red Wi-Fi del usuario está marcada como "Pública").
+- Web: Node 24 y npm 11. En `web/`: `npm ci`, `npm run verificar` (tipos + lint + tests), `npm run dev`, `npm run build`. Para verla en el navegador del panel: `.claude/launch.json` (local, excluido de git en `.git/info/exclude`). En el móvil por la red local: `npm run movil` o `npm run movil-final` (el cortafuegos de Windows tiene que permitir Node.js; la red Wi-Fi del usuario está marcada como "Pública"). **Probar siempre también por la IP de red**, no solo en localhost: por HTTP en la red local no hay contexto seguro y faltan `crypto.subtle`, el *service worker* y la caché. ESLint prohíbe usarlos sin comprobar antes que existen; las huellas usan `nucleo/sha256.ts` como alternativa. En el paso 4, registrar el *service worker* solo si existe.
 - `pytest` ejecuta solo los rápidos (~20 s); `pytest -m slow`, los lentos (fuerza bruta, Monte Carlo grandes, tabla completa; ~2 min).
 - En PowerShell, los mensajes de commit con comillas dobles se rompen: usar `git commit -F fichero`.
 

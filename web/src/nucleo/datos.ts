@@ -16,6 +16,7 @@
 import { type Conteos } from "./cartas";
 import { type OpcionDescarte, opcionesDescarte } from "./descarte";
 import { LANCES, type Lance, REGLAS_POR_DEFECTO } from "./evaluacion";
+import { sha256Js } from "./sha256";
 import { tabla } from "./tablas";
 
 export const FORMATO = 1;
@@ -258,9 +259,27 @@ export function validarFicheroMesa(v: unknown, ruta: string, manifiesto: Manifie
 /** Lee un fichero de datos por su ruta relativa (p. ej. con `fetch` en el navegador). */
 export type Cargador = (ruta: string) => Promise<ArrayBuffer>;
 
+/**
+ * Huella SHA-256 en hexadecimal.
+ *
+ * Usa `crypto.subtle` cuando el navegador lo da. Solo existe en contextos
+ * seguros (HTTPS o localhost): al abrir la web por la red local
+ * (http://192.168…) no está, y entonces se usa la implementación en
+ * JavaScript, que da exactamente lo mismo. La verificación se hace siempre.
+ */
 export async function sha256(contenido: ArrayBuffer): Promise<string> {
-  const resumen = await crypto.subtle.digest("SHA-256", contenido);
-  return Array.from(new Uint8Array(resumen), (b) => b.toString(16).padStart(2, "0")).join("");
+  // Los tipos de TypeScript dan `crypto.subtle` por existente; en un contexto
+  // no seguro el navegador lo deja sin definir.
+  const sutil = (globalThis.crypto as Partial<Crypto> | undefined)?.subtle;
+  if (sutil !== undefined) {
+    try {
+      const resumen = await sutil.digest("SHA-256", contenido);
+      return Array.from(new Uint8Array(resumen), (b) => b.toString(16).padStart(2, "0")).join("");
+    } catch {
+      // Si el navegador lo tiene pero falla, se calcula aquí.
+    }
+  }
+  return sha256Js(new Uint8Array(contenido));
 }
 
 function leerJson(contenido: ArrayBuffer, ruta: string): unknown {

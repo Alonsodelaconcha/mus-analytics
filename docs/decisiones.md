@@ -508,3 +508,36 @@ Las cifras de los casos testigo de la Fase 3c se calcularon con λ = 1. Para rep
 **Error encontrado al probarla en el navegador, ya corregido.** Dos toques muy seguidos en el teclado perdían una carta: cada toque calculaba la mano nueva a partir de una copia anterior del estado. Ahora se usan actualizaciones funcionales, que siempre parten del estado actual. El test de regresión falla con la versión antigua (comprobado) y pasa con la nueva.
 
 **Probarla en el móvil.** `npm run movil` (servidor de desarrollo) o `npm run movil-final` (versión construida) la sirven en la red local. Instalarla y usarla sin conexión queda para el paso 4: el *service worker* que lo permite exige HTTPS, que en la red local no hay y en GitHub Pages sí.
+
+## 2026-10-08 · Error al abrir la web por la red local: `crypto.subtle` solo existe en contextos seguros
+
+**Qué pasó (lo encontró el usuario).** Al abrir la web por la dirección de red (http://172.20.10.2:4173), incluso desde el propio portátil, la recomendación, los descartes y las probabilidades fallaban con "Cannot read properties of undefined (reading 'digest')". Con localhost funcionaba.
+
+**Causa.** La comprobación de huellas usaba `crypto.subtle`, que los navegadores solo ofrecen en contextos seguros: HTTPS o localhost. Por eso no lo vio ninguna prueba:
+- Node y jsdom (donde corren los tests) tienen siempre `crypto.subtle`;
+- las pruebas en el navegador se hicieron en localhost, que cuenta como seguro.
+
+**Lección:** probar en las mismas condiciones que el usuario. Desde ahora, las pruebas en el navegador se hacen también por la IP de red.
+
+**Arreglo:**
+- **SHA-256 en JavaScript puro** (`web/src/nucleo/sha256.ts`, FIPS 180-4), como alternativa. `sha256()` usa `crypto.subtle` si existe y, si no existe o falla, la propia. La verificación de huellas se hace siempre.
+- **Implementación propia en vez de una librería:** son 60 líneas sin dependencias, y se puede comprobar a fondo:
+  - los vectores oficiales del NIST ("abc", la cadena vacía, los mensajes de 448 y 896 bits y un millón de "a");
+  - las 72 constantes, calculadas aparte con aritmética entera exacta (BigInt): K[i] es la raíz cúbica entera de p·2⁹⁶ módulo 2³²;
+  - la implementación de Node, en todas las longitudes de 0 a 300 bytes (cruzando todos los bordes del relleno);
+  - las huellas del manifiesto de los 20 ficheros de datos.
+- **Constantes escritas literalmente, no calculadas al cargar.** El estándar de JavaScript no obliga a que `Math.cbrt` redondee igual en todos los motores, y un solo bit distinto en Safari rompería todas las huellas en el iPhone.
+- **Tests que simulan el contexto no seguro:** `crypto` sin `subtle`, sin `crypto` del todo, y con un `digest` que falla. Los datos se cargan y se verifican igual, y un fichero alterado se sigue rechazando. También hay uno del flujo completo de la web sin `crypto.subtle`.
+- **Comprobado en un navegador real** abriendo la web por la IP de red: `isSecureContext` es `false`, `crypto.subtle` no existe y todo carga sin errores.
+
+**Otras APIs que solo existen en contextos seguros.** En el código actual no hay ninguna más: `localStorage`, `fetch`, `TextDecoder` e `Intl` funcionan también por HTTP (y `localStorage` ya estaba protegido por si el navegador no deja guardar). Las que llegarán con el paso 4 sí lo son:
+- el *service worker* y la caché del navegador (`caches`), necesarios para el uso sin conexión;
+- la instalación como aplicación.
+
+Para que no vuelva a pasar, una regla de ESLint prohíbe en `src` usar directamente `crypto.subtle`, `crypto.randomUUID`, `navigator.serviceWorker`, `navigator.clipboard`, `navigator.storage` y `caches`. Quien las use tiene que comprobar antes que existen y justificarlo en ese punto.
+
+**Regla para el paso 4:** registrar el *service worker* solo si existe. Por la red local, la web funcionará conectada pero sin modo sin conexión; en GitHub Pages (HTTPS), con todo.
+
+**De paso:**
+- Concordancia de los mensajes de error: "No se ha podido cargar la recomendación", "No se han podido cargar los descartes". Hay un test.
+- Los errores de red, que cada navegador da en inglés ("Failed to fetch", "Load failed"), ahora dicen "no hay conexión con el servidor de la web".

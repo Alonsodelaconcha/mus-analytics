@@ -140,7 +140,7 @@ export function App({ cargador }: { cargador: Cargador }) {
   } else if (!huboMus) {
     resultados = (
       <>
-        <ConMesa mesa={mesa} que="la recomendación">
+        <ConMesa mesa={mesa} que="la recomendación" plural={false}>
           {(m) => {
             const decision = decisionDe(m, manifiesto.escalas, indice, posicion);
             return decision === null
@@ -148,7 +148,7 @@ export function App({ cargador }: { cargador: Cargador }) {
               : <Decision vista={vistaDecision(decision)} posicion={nombrePosicion} selectorMesa={selectorMesa} />;
           }}
         </ConMesa>
-        <ConMesa mesa={mesa} que="los descartes">
+        <ConMesa mesa={mesa} que="los descartes" plural>
           {(m) => (
             <BloqueDescartes key={`${String(indice)}-${String(posicion)}-${mesaId}`} mesa={m}
               manifiesto={manifiesto} mano={mano} indice={indice} posicion={posicion} />
@@ -157,7 +157,7 @@ export function App({ cargador }: { cargador: Cargador }) {
         {avisoSenas !== null ? (
           <p className="pista">Corrige las señas para ver las probabilidades de ganar.</p>
         ) : miEquity === undefined || miEquity === null ? (
-          <Estado recurso={equity} que="las probabilidades" />
+          <Estado recurso={equity} que="las probabilidades" plural />
         ) : (
           <Probabilidades
             titulo="Si se juega con estas cartas"
@@ -176,7 +176,7 @@ export function App({ cargador }: { cargador: Cargador }) {
     );
   } else {
     resultados = (
-      <ConMesa mesa={mesa} que="las probabilidades">
+      <ConMesa mesa={mesa} que="las probabilidades" plural>
         {(m) => {
           const e = equityDe(m.tras_mus.datos, manifiesto.escalas, indice, posicion);
           return e === null ? null : (
@@ -262,21 +262,31 @@ function nombresSenas(manifiesto: Manifiesto, ids: readonly string[]): string {
   return manifiesto.senas.filter((s) => ids.includes(s.id)).map((s) => s.nombre.toLowerCase()).join(" y ");
 }
 
-/** Mensaje de carga o de error de un recurso. */
-function Estado<T>({ recurso, que }: { recurso: Recurso<T>; que: string }) {
+/**
+ * Mensaje de carga o de error de un recurso. `plural` concuerda el verbo:
+ * "No se ha podido cargar la recomendación", "No se han podido cargar los descartes".
+ */
+function Estado<T>({ recurso, que, plural }: { recurso: Recurso<T>; que: string; plural: boolean }) {
   if (recurso.estado === "error") {
-    return <p className="bloque aviso" role="alert">No se han podido cargar {que}: {recurso.error}</p>;
+    return (
+      <p className="bloque aviso" role="alert">
+        No se {plural ? "han" : "ha"} podido cargar {que}: {recurso.error}
+      </p>
+    );
   }
   return <p className="pista">Calculando {que}…</p>;
 }
 
 /** Pinta su contenido cuando el fichero de la mesa está cargado. */
-function ConMesa({ mesa, que, children }: {
+function ConMesa({ mesa, que, plural, children }: {
   mesa: Recurso<FicheroMesa>;
   que: string;
+  plural: boolean;
   children: (mesa: FicheroMesa) => ReactNode;
 }) {
-  return mesa.estado === "listo" ? <>{children(mesa.valor)}</> : <Estado recurso={mesa} que={que} />;
+  return mesa.estado === "listo"
+    ? <>{children(mesa.valor)}</>
+    : <Estado recurso={mesa} que={que} plural={plural} />;
 }
 
 function BloqueDescartes({ mesa, manifiesto, mano, indice, posicion }: {

@@ -6,7 +6,7 @@
 
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/App";
 import { leerDato } from "./ayuda";
@@ -14,6 +14,7 @@ import { leerDato } from "./ayuda";
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 const cargador = (ruta: string) => Promise.resolve(leerDato(ruta));
@@ -124,6 +125,28 @@ describe("la calculadora", () => {
     expect(screen.getByText("2/4")).toBeDefined();
     await usuario.click(screen.getByRole("button", { name: "⌫ Borrar" }));
     expect(screen.getByText("1/4")).toBeDefined();
+  });
+
+  it("funciona igual sin crypto.subtle (abierta por la red local, sin HTTPS)", async () => {
+    vi.stubGlobal("crypto", {});
+    const usuario = await empezar();
+    await meterCartas(usuario, ["rey", "caballo", "cinco", "cuatro"]);
+    await usuario.click(screen.getByRole("button", { name: "Mano" }));
+    expect(await screen.findByText("Da mus")).toBeDefined();
+    expect(await screen.findByRole("region", { name: "Si se juega con estas cartas" })).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("si falla el fichero de la mesa, el mensaje concuerda: «No se ha podido cargar la recomendación»", async () => {
+    const usuario = userEvent.setup();
+    render(<App cargador={(ruta) => (ruta.startsWith("mesa-")
+      ? Promise.reject(new Error("no hay conexión con el servidor de la web"))
+      : cargador(ruta))} />);
+    await screen.findByText("Mete tus 4 cartas con el teclado de abajo.");
+    await meterCartas(usuario, ["rey", "caballo", "cinco", "cuatro"]);
+    await usuario.click(screen.getByRole("button", { name: "Mano" }));
+    expect(await screen.findByText(/^No se ha podido cargar la recomendación: no hay conexión/)).toBeDefined();
+    expect(screen.getByText(/^No se han podido cargar los descartes/)).toBeDefined();
   });
 
   it("si los datos no cargan, lo dice y deja reintentar", async () => {
