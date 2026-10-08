@@ -447,3 +447,64 @@ A petición del usuario, `cortar`, `corte-mesa` y `testigos` usan por defecto el
 - `--mesa mucho-mus | normal | se-corta` elige el tipo de mesa y `--factor-corte` sigue permitiendo un λ a mano.
 
 Las cifras de los casos testigo de la Fase 3c se calcularon con λ = 1. Para reproducirlas: `python -m mus testigos --mesa se-corta`.
+
+## 2026-10-08 · Fase 4, paso 3: interfaz (primera versión completa)
+
+**Indicaciones del usuario:**
+- primero el móvil, usable con una mano en el bar;
+- nada de imágenes de barajas comerciales;
+- cifras en lenguaje de jugador ("ganas la grande unas 7 de cada 10 veces").
+
+**Una sola pantalla, de arriba abajo:**
+1. **Tu mano**: las 4 cartas, la jugada ("Par de reyes · 31 de juego"), la posición y "¿Ha habido mus?".
+2. **Señas del compañero**, plegadas.
+3. **¿Mus o corto?**, con el tipo de mesa.
+4. **Si hay mus, ¿qué tiro?**
+5. **Probabilidades de ganar.**
+6. **ⓘ Cifras sin apostar (en paso)**: las limitaciones en lenguaje llano.
+
+**Pensada para el pulgar:**
+- El teclado de cartas está fijo abajo, con teclas de casi 60 px en el orden en que piensa un jugador: R C S 7 / 6 5 4 A. Las teclas del rey y del as indican "· 3" y "· 2".
+- Con la cuarta carta, el teclado deja sitio a una barra con "Ha habido mus" y "Nueva mano", y el veredicto queda a la vista sin desplazar la pantalla (comprobado a 390 × 844).
+- Todos los botones miden al menos 47 px de alto.
+
+**Cartas de diseño propio:** una letra grande sobre un rectángulo claro, como el cartón de una baraja (también en modo oscuro). Las figuras van en rojo para distinguirlas de un vistazo. No hay imágenes.
+
+**Flujo de una mano:**
+- **La posición no tiene valor por defecto.** Un valor por defecto equivocado daría un consejo equivocado sin que se notara. Una vez elegida, se mantiene durante la sesión.
+- **No se gira sola de una mano a otra:** habría que suponer cómo se pasa la mano en la mesa del usuario. Queda como idea.
+- **Cambiar "¿Ha habido mus?" vacía las cartas.** Tras el mus la mano siempre es otra, porque hay que tirar al menos una.
+- **"Ha habido mus" borra también las señas**, que en el MVP no se usan tras el mus.
+- **"Nueva mano"** lo vacía todo menos la posición.
+- **El tipo de mesa se recuerda en el móvil** (`localStorage`; si el navegador no deja guardar, funciona igual sin recordarlo).
+
+**Lenguaje.** Todo el texto que ve el usuario sale de `web/src/vista/lenguaje.ts` y `vista.ts` (funciones puras, con tests). Sin "equity", "λ" ni "Monte Carlo".
+- **Probabilidades:** el porcentaje y una frecuencia. "Unas 7 de cada 10 veces"; "1 de cada 14 veces" por debajo del 10 %; "casi nunca" y "casi siempre" en los extremos. "Ganáis" es la pareja; "tú solo" va en segundo plano. La barra enseña las dos cosas.
+- **Tantos:** por cada 10 manos cuando la diferencia llega a 1 tanto cada 10 manos ("unos 3 tantos más cada 10 manos"); si no, por cada 100. Se pasa a "por mano" desde 1. Un primer redondeo convertía 0,07 en "1 tanto cada 10 manos", que exagera un 40 %; lo detectó un test.
+
+**Umbrales de presentación** (decididos para esta versión; a revisar con la opinión del usuario como jugador):
+
+| Situación | Cómo se presenta |
+|---|---|
+| Diferencia < 0,03 tantos por mano, o la simulación no distingue | "Da igual" (menos de 1 tanto cada 30 manos) |
+| De 0,03 a 0,15 | "Corta" o "Da mus", con la etiqueta "Por poco" |
+| Desde 0,15 | "Corta" o "Da mus", con la etiqueta "Claro" |
+| Descarte a menos de 0,02 de la mejor, o dentro de su margen de error | "Casi igual que la mejor" |
+
+**Descartes:**
+- Arriba, la mejor opción ("Quédate con R C. Pides 2: tiras el cinco y el cuatro"). Las cartas iguales se agrupan: "tiras la sota y los dos cuatros".
+- Debajo, las alternativas, con lo que se pierde con cada una. Al tocar una se ve con qué acabarías: probabilidad exacta de pares, juego y 31, calculada en el navegador.
+- También cuánto ganaríais cada lance tras el mus: la distribución exacta de la mano final ponderada con la tabla de la mesa tras el mus.
+
+**Señas:**
+- Se marcan tocándolas y se combinan.
+- Si son imposibles juntas, o con tus cartas, la web lo dice y no enseña probabilidades.
+- La chuleta (nombre, gesto y cartas) se abre como hoja desde abajo y se cierra con "Cerrar", con Escape o tocando fuera.
+
+**Tests de la interfaz** (26 nuevos; 101 en total en la web):
+- Lenguaje y modelo de vista, con los datos reales.
+- El flujo completo con React Testing Library en jsdom: meter cartas, posición, tipo de mesa (y que se recuerde), señas, señas imposibles, chuleta, "Ha habido mus", "Nueva mano", quitar y borrar cartas, y un fallo de carga con su reintento.
+
+**Error encontrado al probarla en el navegador, ya corregido.** Dos toques muy seguidos en el teclado perdían una carta: cada toque calculaba la mano nueva a partir de una copia anterior del estado. Ahora se usan actualizaciones funcionales, que siempre parten del estado actual. El test de regresión falla con la versión antigua (comprobado) y pasa con la nueva.
+
+**Probarla en el móvil.** `npm run movil` (servidor de desarrollo) o `npm run movil-final` (versión construida) la sirven en la red local. Instalarla y usarla sin conexión queda para el paso 4: el *service worker* que lo permite exige HTTPS, que en la red local no hay y en GitHub Pages sí.

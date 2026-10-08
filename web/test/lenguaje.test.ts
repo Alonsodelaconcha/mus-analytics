@@ -1,0 +1,89 @@
+import { describe, expect, it } from "vitest";
+
+import { leerMano } from "../src/nucleo/cartas";
+import { opcionesDescarte } from "../src/nucleo/descarte";
+import {
+  conSigno,
+  describirJuego,
+  describirPares,
+  frecuencia,
+  porcentaje,
+  tantosPorMano,
+  textoOpcion,
+} from "../src/vista/lenguaje";
+
+// Intl en español usa un espacio duro antes del %; se normaliza para comparar.
+const normal = (s: string) => s.replace(/\s/g, " ");
+
+describe("cifras", () => {
+  it("porcentajes", () => {
+    expect([0, 0.003, 0.62, 0.996, 1].map((p) => normal(porcentaje(p))))
+      .toEqual(["0 %", "<1 %", "62 %", ">99 %", "100 %"]);
+  });
+
+  it("frecuencias en palabras", () => {
+    expect([0, 0.004, 0.07, 0.1, 0.34, 0.66, 0.94, 0.96, 1].map(frecuencia)).toEqual([
+      "nunca",
+      "casi nunca",
+      "1 de cada 14 veces",
+      "1 de cada 10 veces",
+      "unas 3 de cada 10 veces",
+      "unas 7 de cada 10 veces",
+      "unas 9 de cada 10 veces",
+      "casi siempre",
+      "siempre",
+    ]);
+  });
+
+  it("tantos dichos como los notaría un jugador", () => {
+    expect(tantosPorMano(0.283)).toBe("unos 3 tantos cada 10 manos");
+    expect(tantosPorMano(-0.07)).toBe("unos 7 tantos cada 100 manos");
+    expect(tantosPorMano(0.1)).toBe("1 tanto cada 10 manos");
+    expect(tantosPorMano(1)).toBe("1 tanto por mano");
+    expect(tantosPorMano(2.0)).toBe("unos 2 tantos por mano");
+    expect(tantosPorMano(-1.14)).toBe("unos 1,1 tantos por mano");
+    expect(tantosPorMano(0.004)).toBe("menos de 1 tanto cada 100 manos");
+    expect(tantosPorMano(0.283, true)).toBe("unos 3 tantos más cada 10 manos");
+    expect(tantosPorMano(0.004, true)).toBe("menos de 1 tanto más cada 100 manos");
+  });
+
+  it("signo", () => {
+    expect([conSigno(0.07), conSigno(-0.07), conSigno(0), conSigno(-0.001)])
+      .toEqual(["+0,07", "−0,07", "0,00", "0,00"]);
+  });
+});
+
+describe("jugadas", () => {
+  it.each([
+    ["R R C 5", "Par de reyes"],
+    ["7 7 7 S", "Medias de sietes"],
+    ["R R A A", "Duples de reyes y ases"],
+    ["5 5 5 5", "Duples de cuatro cincos"],
+    ["R C 5 4", "Sin pares"],
+  ])("%s: %s", (mano, texto) => {
+    expect(describirPares(leerMano(mano))).toBe(texto);
+  });
+
+  it("juego y punto", () => {
+    expect(describirJuego(leerMano("R C S A"))).toBe("31 de juego");
+    expect(describirJuego(leerMano("R C 5 4"))).toBe("Sin juego: 29 al punto");
+  });
+});
+
+describe("descartes en palabras", () => {
+  const texto = (mano: string, quedo: string) => {
+    const conteos = leerMano(mano);
+    const opcion = opcionesDescarte(conteos).find((o) => textoOpcion(o).quedo === quedo);
+    if (opcion === undefined) throw new Error(`no hay opción ${quedo}`);
+    return textoOpcion(opcion);
+  };
+
+  it("lo que se queda y lo que se tira, con cartas iguales agrupadas", () => {
+    expect(texto("R C 5 4", "R C")).toMatchObject({
+      titulo: "Quédate con R C",
+      detalle: "Pides 2: tiras el cinco y el cuatro",
+    });
+    expect(texto("R 4 4 S", "R").detalle).toBe("Pides 3: tiras la sota y los dos cuatros");
+    expect(texto("A A 4 5", "")).toMatchObject({ titulo: "Tíralas todas", detalle: "Pides 4: tiras las cuatro" });
+  });
+});

@@ -144,7 +144,7 @@ npm ci
 npm run verificar
 ```
 
-`npm run dev` la abre en el navegador; `npm run build` la construye en `web/dist`. Los datos que consulta los genera `python -m mus exportar-web`.
+`npm run dev` la abre en el navegador; `npm run build` la construye en `web/dist`; `npm run movil` la sirve en la red local para probarla en un móvil conectado a la misma Wi-Fi. Los datos que consulta los genera `python -m mus exportar-web`.
 
 ## Tests
 
