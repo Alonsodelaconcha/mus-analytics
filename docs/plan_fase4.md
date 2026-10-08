@@ -80,3 +80,45 @@ La web pregunta "¿Ha habido mus?".
 - **Sí:** las de la mesa tras el mus del tipo de mesa elegido, sin señas.
 
 Las limitaciones (sin señas tras el mus, sin tener en cuenta quién ha cortado) se explican claramente en la web. Las dos mejoras son de prioridad alta en la versión 2.
+
+## Propuesta de estructura A: una pestaña por momento de la mano (2026-10-08)
+
+Guardada a petición del usuario, tal como se le presentó. **Pendiente de su visto bueno**: no se ha implementado.
+
+**Por qué.** Al abrir los desplegables hay que desplazarse mucho, y el bloque de señas, encima del veredicto, parecía influir en la recomendación. En la mesa hay tres momentos, y cada uno necesita cosas distintas:
+1. **Decidir mus o corto:** importan la recomendación y el descarte.
+2. **Alguien ha cortado:** se juega con las cartas del reparto; importan las probabilidades con señas.
+3. **Ha habido mus:** cartas nuevas; solo importan las probabilidades, sin señas (el modelo es de una sola ronda de mus).
+
+**Estructura.**
+- **Arriba, siempre:** la mano en versión compacta (las 4 cartas pequeñas, la jugada y el tipo de mesa) y el selector de posición.
+- **Debajo, un selector de tres pestañas** que sustituye a «¿Ha habido mus? Sí/No»: «¿Mus o corto?» (*decidir*), «Se ha cortado» (*cartas del reparto*) y «Ha habido mus» (*cartas nuevas*).
+- **Abajo, fijo:** el teclado mientras se meten cartas y, con la mano completa, «Nueva mano», que sigue girando la posición como ahora.
+
+**Qué va en cada pestaña:**
+
+| Pestaña | Contenido |
+|---|---|
+| **¿Mus o corto?** | La recomendación: veredicto, explicación, matiz de las decisiones ajustadas, aviso «Ojo: este consejo no cuenta las señas de tu compañero» si hay señas marcadas, y tipo de mesa. Debajo, el descarte: el mejor, con qué acabarías (pares, juego) y un enlace a las otras formas de descartarse. |
+| **Se ha cortado** | Las señas del compañero en una rejilla compacta de tres columnas, con el enlace a la chuleta. Debajo, «Si se juega con estas cartas, ganáis…»: las cinco probabilidades exactas en una fila (con las señas marcadas), una nota con las señas que se usan y los tantos que se esperan. |
+| **Ha habido mus** | Se meten las cartas nuevas y salen las probabilidades tras el mus, sin señas, con la nota de que llegarán en una versión posterior. Aquí no aparece el bloque de señas. |
+
+Así las señas solo están donde cuentan, y no pueden parecer parte de la recomendación. Con la mano completa, cada pestaña cabe casi entera en una pantalla de 390 × 844.
+
+**Maquetas.** `docs/maquetas/propuesta-A-pestanas.png` contiene las tres pantallas (A1, A2 y A3) a 390 × 844.
+- Se hicieron como HTML estático con la hoja de estilos real de la web y cifras reales:
+  - R C 5 4 de mano, mesa Normal;
+  - en A2, compañero con dos reyes;
+  - en A3, R R C S de postre tras el mus.
+- Las capturas se hicieron con Edge sin ventana. El HTML de las maquetas y el script de capturas estaban en la carpeta temporal de la sesión y no se han guardado; solo la imagen.
+
+**Alternativa presentada junto a esta (B):** todo de un vistazo, con el veredicto, el mejor descarte y una fila de probabilidades sin señas. La barra inferior lleva «Han cortado», «Ha habido mus» y «Nueva mano», y «Han cortado» abre una hoja desde abajo con las señas y las probabilidades con señas. Se recomendó A: sigue el orden de la mano y separa las señas de la recomendación por diseño. B se lee más rápido pero esconde más tras un toque.
+
+**Pendiente de decidir con el usuario antes de implementarla:**
+1. Si elige A.
+2. En «Se ha cortado»: las probabilidades en palabras («unas 9 de cada 10 veces») o la fila de cinco cifras, con las palabras al tocar cada lance.
+3. Si al completar las 4 cartas la web debe abrir sola la pestaña «¿Mus o corto?».
+
+**Otras cosas pendientes de esta fase:**
+- **Script de capturas.** Puede valer la pena guardar en el repositorio un script de capturas a tamaño de móvil, para las comprobaciones visuales y para las capturas del README en el paso 4. El navegador del panel da capturas con mosaicos repetidos. Es una idea, sin decidir.
+- **IP de la red local.** Cambia con la red Wi-Fi (172.20.10.2 en la zona compartida del móvil; 192.168.1.37 en otra). Hay que usar siempre la que muestra `npm run movil-final`.
