@@ -108,6 +108,7 @@ python -m mus cortar "R C 5 4" --posicion 1 --mesa se-corta
 python -m mus cortar "A A 4 5" --posicion 4 --companero "sin_pares, sin_juego, reyes<=1"
 python -m mus tras-mus
 python -m mus testigos
+python -m mus manos-reales
 python -m mus calibrar
 ```
 
@@ -123,12 +124,14 @@ Algunos cálculos tardan entre uno y varios minutos la primera vez y se guardan 
 
 Las decisiones dudosas de cortar o dar mus dependen de cuánto se corta en la mesa. Para ajustarlo con datos reales:
 
-1. Apunta en `datos/mus_real.csv` cuántas manos has jugado y en cuántas hubo mus en la primera ronda (una fila por sesión).
-2. Ejecuta `python -m mus calibrar`. Muestra el porcentaje observado con su intervalo de confianza y el λ con el que el modelo da ese mismo porcentaje.
-3. Con unas 40-50 manos, el λ calibrado se puede usar con `--factor-corte`. El comando no cambia nada por sí solo. Por defecto, `cortar`, `corte-mesa` y `testigos` usan el tipo de mesa "Normal" de la web; `--mesa` elige otro (`mucho-mus`, `normal`, `se-corta`).
-4. Opcional: apunta en `datos/cortes_por_posicion.csv` cuántas veces le toca hablar a cada posición y cuántas corta. `calibrar` lo compara con lo que predice el modelo para cada posición.
+1. Apunta cada mano en `datos/manos_reales.csv`: partida, número de mano y la secuencia de rondas (`mus` o la posición que corta; por ejemplo, `mus mus mano`). La primera mano de cada partida se excluye: se juega con mus corrido y sin señas, y quien corta pasa a ser mano. También se excluyen las manos que no se recuerdan. Hay dos columnas más: tu posición y si has usado la web.
+2. Ejecuta `python -m mus manos-reales`. Valida el fichero, cuenta las manos y regenera `datos/mus_real.csv` (por partida) y `datos/cortes_por_posicion.csv` (por partida y posición), que solo usan la primera ronda.
+3. Ejecuta `python -m mus calibrar`. Muestra el porcentaje de manos con mus, con su intervalo de confianza, y el λ con el que el modelo da ese mismo porcentaje. Compara también el corte de cada posición con lo que predice el modelo. Avisa si los dos resúmenes no coinciden con las anotaciones.
+4. El comando no cambia nada por sí solo. El λ calibrado se puede usar con `--factor-corte`. Por defecto, `cortar`, `corte-mesa` y `testigos` usan el tipo de mesa "Normal" de la web; `--mesa` elige otro (`mucho-mus`, `normal`, `se-corta`). La mesa "Normal" (30 % de mus) solo se cambia si el intervalo de los datos la excluye.
 
-Con las primeras 45 manos reales (sin contar la primera de cada partida, que se juega con mus corrido y sin señas), hubo mus en el 29 %: λ ≈ 0,65. El corte por posición encaja con el modelo (χ² con p = 0,90), y la pareja segundo-postre corta 1,8 veces más que la de la mano, frente a 1,6 que predecía el modelo.
+Con 71 manos reales de 15 partidas, hubo mus en el 34 % (IC 95 %: 24-45 %): λ ≈ 0,58 (intervalo 0,44-0,73), compatible con la mesa "Normal". El corte por posición encaja con el modelo (χ² con p = 0,88). La pareja segundo-postre corta 1,4 veces más que la de la mano (IC 95 %: 0,85-2,33), y el modelo predice 1,6.
+
+Limitaciones: el autor juega en todas las partidas, y las manos de una misma partida no son del todo independientes. Con estos datos, la variación entre partidas es compatible con el azar (p = 0,33) y apenas ensancha el error (×1,06), pero 15 partidas no bastan para descartar una variación moderada.
 
 ## Web (en construcción)
 
@@ -169,7 +172,7 @@ El primero lanza los tests rápidos (unos segundos). El segundo, las verificacio
 | `descarte.py` | Opciones de descarte y distribución exacta de la mano resultante |
 | `tras_mus.py` | La mesa tras el mus: políticas de descarte, simulación de la ronda y equilibrio |
 | `cortar.py` | Cortar o dar mus con el efecto de selección |
-| `calibracion.py`, `testigos.py` | Calibración con partidas reales y casos testigo |
+| `manos_reales.py`, `calibracion.py`, `testigos.py` | Anotaciones de partidas reales, calibración y casos testigo |
 | `senas.py` | Señas del compañero, libres y combinables |
 | `web.py` | Datos precalculados para la web y ficheros de referencia del núcleo en TypeScript |
 | `analisis.py` | Exportación a CSV y JSON, rankings y gráficas |

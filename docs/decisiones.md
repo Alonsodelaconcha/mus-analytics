@@ -311,7 +311,7 @@ Cuesta 1 320 simulaciones por tipo de mesa, en paralelo y una sola vez.
 - "Normal": 30 %, como las primeras partidas del usuario.
 - "Se corta mucho": λ = 1, los rivales razonables (11,5 %).
 
-Cuando haya 40-50 manos anotadas, el 30 % de "Normal" se cambiará por el calibrado.
+Cuando haya 40-50 manos anotadas, el 30 % de "Normal" se cambiará por el calibrado. *(Sustituido el 2026-10-08: el 30 % solo se cambia si el intervalo de los datos lo excluye; ver "Datos reales: 15 partidas".)*
 
 **Formato.**
 - Enteros escalados: probabilidades ×10 000 y tantos ×1 000. Son más compactos que los decimales y conservan más precisión de la que se muestra.
@@ -366,25 +366,27 @@ Las dos limitaciones se explicarán claramente en la web:
 
 ## 2026-10-08 · Datos reales: calibración de λ y corte por posición
 
-**Qué manos se cuentan.** El usuario excluye la primera mano de cada partida: se juega con "mus corrido y sin señas", la norma tradicional para determinar la mano sin comunicación entre compañeros, así que no refleja decisiones de mus. También excluye una mano que no recuerda. Quedan 9 sesiones con 45 manos; la primera sustituye a la que había. **Fase 6:** al modelar la partida completa, la primera mano de cada partida tiene estas reglas especiales.
+> **Corregido el mismo día.** En la partida 1, la primera mano ("corto (tercero)") también era la especial y no se había excluido: los datos de esta entrada llevaban una mano de más (45 en vez de 44, y un corte de más del tercero). Las cifras de abajo ya están corregidas; entre corchetes, las que se publicaron. Los datos actuales, con 15 partidas, están en "Datos reales: 15 partidas, anotadas mano a mano".
 
-**Calibración.** Hubo mus en 13 de 45 manos: 29 % (IC 95 %: 18-43 %). Corresponde a λ = 0,65 (intervalo 0,46-0,85). La mesa "Normal" de la web usa λ = 0,63 (30 %), dentro del intervalo, así que se deja como está. `calibrar` lo comprueba ahora cada vez.
+**Qué manos se cuentan.** El usuario excluye la primera mano de cada partida: se juega con "mus corrido y sin señas", la norma tradicional para determinar la mano sin comunicación entre compañeros, así que no refleja decisiones de mus. También excluye una mano que no recuerda. Quedan 9 sesiones con 44 manos [45]; la primera sustituye a la que había. **Fase 6:** al modelar la partida completa, la primera mano de cada partida tiene estas reglas especiales.
+
+**Calibración.** Hubo mus en 13 de 44 manos: 30 % (IC 95 %: 18-44 %) [29 %, 18-43 %]. Corresponde a λ = 0,64 (intervalo 0,45-0,84) [0,65; 0,46-0,85]. La mesa "Normal" de la web usa λ = 0,63 (30 %), dentro del intervalo, así que se deja como está. `calibrar` lo comprueba ahora cada vez.
 
 **Corte por posición** (`datos/cortes_por_posicion.csv`). Es una comprobación independiente de la calibración: λ se ajustó con un solo número, la frecuencia total de mus, así que **el reparto del corte entre posiciones es una predicción del modelo que no se ha ajustado con estos datos**. Los datos son coherentes: cada posición habla tantas veces como la anterior menos las que cortó, y los que llegan al final sin corte son las 13 manos con mus.
 
 | Posición | Corta / habla | Observado (IC 95 %) | Modelo, mesa "Normal" | p (binomial exacto) |
 |---|---|---|---|---|
-| Mano | 8 / 45 | 18 % (9-31 %) | 21 % | 0,72 |
-| Segundo | 11 / 37 | 30 % (17-46 %) | 33 % | 0,86 |
-| Tercero | 5 / 26 | 19 % (9-38 %) | 18 % | 0,80 |
+| Mano | 8 / 44 [8 / 45] | 18 % (10-32 %) | 21 % | 0,72 |
+| Segundo | 11 / 36 [11 / 37] | 31 % (18-47 %) | 33 % | 0,86 |
+| Tercero | 4 / 25 [5 / 26] | 16 % (6-35 %) | 18 % | 1,00 |
 | Postre | 8 / 21 | 38 % (21-59 %) | 30 % | 0,48 |
 
-- **Contraste global** (Pearson, 4 g.l.): χ² = 1,07, p = 0,90. Los datos encajan con el modelo.
-- **Por parejas.** La de la mano corta el 18 % de las veces que habla (modelo: 20 %). La pareja segundo-postre, el 33 % (modelo: 32 %). La segunda corta **1,79 veces más** (IC 95 % 0,97-3,31), y el modelo predice 1,59.
+- **Contraste global** (Pearson, 4 g.l.): χ² = 0,99, p = 0,91 [1,07; 0,90]. Los datos encajan con el modelo.
+- **Por parejas.** La de la mano corta el 17 % de las veces que habla (modelo: 20 %). La pareja segundo-postre, el 33 % (modelo: 32 %). La segunda corta **1,92 veces más** (IC 95 % 1,02-3,61) [1,79; 0,97-3,31], y el modelo predice 1,58.
 
 **Interpretación.**
 - La predicción de la Fase 3c (que la pareja 2-4 corta mucho más porque el mus favorece a la de la mano) se confirma en el valor central.
-- Pero con 45 manos el intervalo de la razón casi llega a 1: los datos por sí solos aún no bastan para afirmar la diferencia. Lo que sí muestran es que no contradicen el modelo en ninguna posición.
+- Pero con 44 manos el intervalo de la razón queda justo por encima de 1 (antes de corregir, lo incluía): los datos por sí solos apenas bastan para afirmar la diferencia. Lo que sí muestran es que no contradicen el modelo en ninguna posición. (Con 15 partidas, la razón baja a 1,41 y su intervalo vuelve a incluir el 1.)
 - En el modelo, la razón es ~1,6 para cualquier λ. λ escala por igual el corte de los cuatro asientos, así que la estructura entre posiciones viene de los rivales razonables, no de λ.
 
 **Herramientas.** `calibracion.leer_cortes`, `comparar_cortes` (binomial exacto por posición, χ² global con su cola exacta para grados pares y razón entre parejas por el método delta) y `cortes_del_modelo`. `python -m mus calibrar` lo muestra si existe el fichero y avisa si no cuadra con `mus_real.csv`.
@@ -600,3 +602,48 @@ Cada uno necesita cosas distintas, y hoy todo va en una sola columna larga. Dos 
 - **B. Todo de un vistazo y el detalle en hojas.** Una tarjeta resume el veredicto, el mejor descarte y lo que se espera tener, y debajo hay una fila con las cinco probabilidades sin señas. La barra de abajo tiene «Han cortado», «Ha habido mus» y «Nueva mano»; «Han cortado» abre una hoja desde abajo con las señas y las probabilidades con señas.
 
 **Recomendación: A.** Coincide con cómo transcurre la mano, separa las señas de la recomendación por diseño y casi no obliga a desplazarse. B es más rápida de leer pero esconde más cosas tras un toque.
+
+## 2026-10-08 · Datos reales: 15 partidas, anotadas mano a mano
+
+**Las anotaciones en bruto son la fuente.** Hasta ahora se apuntaban a mano los totales por sesión (`mus_real.csv`) y por posición (`cortes_por_posicion.csv`). Así se perdía lo que pasaba después de la primera ronda, y un error al sumar no se podía revisar. Ahora:
+- `datos/manos_reales.csv` tiene una fila por mano: partida, número de mano, la secuencia de rondas, si se excluye y por qué, la posición del usuario, si ha usado la web y la anotación original, tal cual. Cada ronda es `mus` o la posición que corta: `mus mus mano` son dos rondas de mus y en la tercera corta la mano. `?` es lo que no se recuerda.
+- `python -m mus manos-reales` (módulo `manos_reales`) valida el fichero y genera los dos resúmenes: `mus_real.csv` por partida y `cortes_por_posicion.csv` por partida y posición. Por partida, y no en totales, para poder medir la variación entre partidas.
+- La validación rechaza lo que daría cifras falsas sin avisar: una primera mano sin excluir, una mano excluida sin motivo, una mano con la primera ronda desconocida sin excluir, rondas después de un corte, una mano que acaba en mus o huecos en la numeración. Los errores dicen la línea.
+- `calibrar` avisa si los resúmenes no coinciden con las anotaciones, y un test falla si los versionados quedan desfasados.
+
+**Criterios (del usuario).**
+- **Se excluye la primera mano de cada partida.** Se juega con mus corrido y sin señas, y quien corta pasa a ser mano: así se decide la mano de la partida. No refleja decisiones de mus normales. **Fase 6:** la partida completa tiene que modelar esta primera mano aparte.
+- Se excluyen las manos que no se recuerdan (una).
+- Para las estadísticas solo cuenta la primera ronda.
+- **Corrección:** en la partida 1, la primera mano también era la especial. Los datos anteriores llevaban una mano de más; la entrada anterior está corregida.
+
+**Las cuentas a mano del usuario coinciden todas** con las que salen del fichero (un test las fija para las partidas 1-15):
+- 87 manos anotadas; se excluyen 16 (15 primeras manos y 1 que no recuerda). Quedan 71, con mus en la primera ronda en 24 (34 %).
+- Partidas 1-9: 44 manos y 13 con mus.
+- Cortes en la primera ronda: mano 14 de 71, segundo 15 de 57, tercero 8 de 42 y postre 10 de 34. Son coherentes: cada posición habla tantas veces como la anterior menos las que cortó, y las 24 restantes son las manos con mus.
+
+**Calibración (71 manos).** Mus en 24 de 71: 34 % (IC 95 %: 24-45 %). Corresponde a **λ = 0,58 (intervalo 0,44-0,73)**.
+
+**Regla para la mesa "Normal" (del usuario).** Se mantiene en el 30 % (λ = 0,63) salvo que el intervalo de los datos la excluya. Ahora queda dentro, así que no cambia. Motivo: cambiarla con cada estimación movería las recomendaciones de la web sin una razón sólida, y el valor central todavía se mueve con cada partida (0,64 con 9 partidas; 0,58 con 15).
+
+**Corte por posición** (comprobación independiente: λ se ajustó solo con la frecuencia total de mus):
+
+| Posición | Corta / habla | Observado (IC 95 %) | Modelo, mesa "Normal" | p (binomial exacto) |
+|---|---|---|---|---|
+| Mano | 14 / 71 | 20 % (12-30 %) | 21 % | 0,88 |
+| Segundo | 15 / 57 | 26 % (17-39 %) | 33 % | 0,33 |
+| Tercero | 8 / 42 | 19 % (10-33 %) | 18 % | 0,84 |
+| Postre | 10 / 34 | 29 % (17-46 %) | 30 % | 1,00 |
+
+- **Contraste global** (Pearson, 4 g.l.): χ² = 1,21, p = 0,88. Los datos encajan con el modelo.
+- **Por parejas.** La de la mano corta el 19 % de las veces que habla (modelo: 20 %); la pareja segundo-postre, el 27 % (modelo: 32 %). **Razón: 1,41 (IC 95 % 0,85-2,33)**; el modelo predice 1,59.
+- **Interpretación.** Con las 9 primeras partidas la razón era 1,92 (1,02-3,61). Las 6 nuevas la bajan, sobre todo porque el segundo corta menos de lo previsto (26 % frente a 33 %, p = 0,33). La predicción del modelo queda dentro de los dos intervalos. Los datos siguen sin contradecir el modelo, pero tampoco bastan aún para confirmar que la pareja 2-4 corta más.
+
+**Limitaciones de los datos.**
+1. **Las manos de una misma partida no son independientes.** Juegan los mismos, con el mismo marcador y el estilo de esa noche. La frecuencia de mus varía mucho entre partidas: de 0 de 3 (partida 14) a 5 de 7 (partida 10). Los intervalos de Wilson suponen manos independientes. Para medirlo, `calibrar` muestra ahora:
+   - **Si varía más de lo que daría el azar.** χ² de homogeneidad entre partidas = 15,8 con 14 g.l. Con partidas de 1 a 9 manos la aproximación χ² no vale, así que el p-valor sale de 100 000 permutaciones: se reparten al azar las 24 manos con mus entre las partidas, con sus tamaños. **p = 0,33**: la variación observada es compatible con el azar.
+   - **Cuánto se ensancharía el error.** El error típico contando cada partida como un bloque (estimador robusto por conglomerados) es **×1,06** el binomial: el intervalo de λ apenas cambiaría.
+   - **Pero con 15 partidas el contraste tiene poca potencia**: no detectaría una variación real moderada entre partidas. La limitación se mantiene, y conviene volver a mirarlo con más partidas.
+2. **El usuario juega en todas las partidas**, así que su forma de jugar pesa en los datos. Según él, no es ni muy agresiva ni muy conservadora, y varía según la partida. Para poder separar sus decisiones de las de los demás, el fichero tiene dos columnas nuevas: `mi_posicion` y `usa_web`. Están vacías en las 15 partidas anotadas hasta ahora; el usuario las rellenará desde ahora. `manos-reales` cuenta cuántas manos las tienen.
+
+**Dato para la Fase 6: rondas siguientes** (sin cambiar el modelo, que es de una sola ronda de mus). De las 24 manos con mus en la primera ronda, se sabe cómo siguieron 23 (en una solo se anotó "mus"). En **8 de 23 hubo otra ronda de mus: 35 % (IC 95 %: 19-55 %)**, como contó el usuario. Rondas de mus antes del corte: 1 en 15 manos, 2 en 7 y 3 en 1. La frecuencia se parece a la de la primera ronda (34 %), pero con 23 manos no se puede saber si tras el mus se corta más o menos que con las cartas del reparto.

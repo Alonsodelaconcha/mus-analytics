@@ -6,18 +6,26 @@ y λ = 1 los rivales razonables. Las decisiones dudosas dependen de él. La form
 de fijarlo es medir en partidas reales en qué proporción de manos hay mus en la
 primera ronda y buscar el λ con el que el modelo da esa misma proporción.
 
-Los datos se apuntan en ``datos/mus_real.csv`` (una fila por sesión). Este
-módulo **no cambia nada**: informa del λ compatible con los datos y de su
-incertidumbre. Con pocas manos el intervalo es tan ancho que no sirve; se
+Los datos salen de las anotaciones mano a mano de ``datos/manos_reales.csv``
+(módulo :mod:`mus.manos_reales`), que generan ``datos/mus_real.csv``: una fila
+por partida, con solo la primera ronda. Este módulo **no cambia nada**: informa
+del λ compatible con los datos y de su incertidumbre. Con pocas manos el intervalo es tan ancho que no sirve; se
 recomienda decidir con al menos :data:`MANOS_RECOMENDADAS`.
 
-Limitación: λ resume en un número cómo cortan los jugadores. Los jugadores
-reales no cortan exactamente como "rivales razonables escalados"; dependen
-también del marcador, las señas y el estilo. Es una calibración gruesa.
+Limitaciones:
 
-Una comprobación más fina, que no se usa para ajustar nada: en
-``datos/cortes_por_posicion.csv`` se apunta cuántas veces le tocó hablar a cada
-posición y cuántas cortó, y :func:`comparar_cortes` lo contrasta con lo que
+- λ resume en un número cómo cortan los jugadores. Los jugadores reales no
+  cortan exactamente como "rivales razonables escalados"; dependen también del
+  marcador, las señas y el estilo. Es una calibración gruesa.
+- Los intervalos suponen manos independientes, y las de una misma partida no lo
+  son del todo (mismos jugadores, mismo marcador).
+  :func:`variacion_entre_partidas` mide si la frecuencia de mus varía entre
+  partidas más de lo que daría el azar y cuánto se ensancharía el error.
+- El usuario juega todas las partidas: sus decisiones pesan en los datos.
+
+Una comprobación más fina, que no se usa para ajustar nada:
+``datos/cortes_por_posicion.csv`` (generado igual) dice cuántas veces le tocó
+hablar a cada posición y cuántas cortó, y :func:`comparar_cortes` lo contrasta con lo que
 predice el modelo para cada posición (por ejemplo, que la pareja segundo-postre
 corta bastante más que la de la mano).
 """
@@ -30,6 +38,8 @@ from dataclasses import dataclass
 from math import comb, exp, factorial, log, sqrt
 from pathlib import Path
 from statistics import NormalDist
+
+import numpy as np
 
 from mus.reglas import REGLAS_POR_DEFECTO, ReglasMus
 from mus.simulacion import Estimacion
@@ -55,17 +65,19 @@ class Observacion:
         return Estimacion(self.con_mus, self.manos, confianza)
 
 
-def leer_observaciones(ruta: str | Path = RUTA_DATOS) -> Observacion:
-    """Suma las sesiones del CSV (columnas ``manos`` y ``con_mus``)."""
+def leer_partidas(ruta: str | Path = RUTA_DATOS) -> list[Observacion]:
+    """Una observación por fila del CSV (columnas ``manos`` y ``con_mus``)."""
     ruta = Path(ruta)
     if not ruta.exists():
-        raise ValueError(f"No existe {ruta}: créalo con columnas sesion,fecha,manos,con_mus,notas")
-    manos = con_mus = 0
+        raise ValueError(f"No existe {ruta}: genéralo con python -m mus manos-reales")
     with ruta.open(encoding="utf-8") as f:
-        for fila in csv.DictReader(f):
-            manos += int(fila["manos"])
-            con_mus += int(fila["con_mus"])
-    return Observacion(manos, con_mus)
+        return [Observacion(int(fila["manos"]), int(fila["con_mus"])) for fila in csv.DictReader(f)]
+
+
+def leer_observaciones(ruta: str | Path = RUTA_DATOS) -> Observacion:
+    """Suma las partidas del CSV."""
+    partidas = leer_partidas(ruta)
+    return Observacion(sum(o.manos for o in partidas), sum(o.con_mus for o in partidas))
 
 
 def curva_hay_mus(reglas: ReglasMus = REGLAS_POR_DEFECTO,
@@ -130,6 +142,56 @@ def calibrar(observacion: Observacion, curva: list[tuple[float, float]],
                        not (dentro_alto and dentro_bajo))
 
 
+# --- Manos de una misma partida ----------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class VariacionEntrePartidas:
+    """¿Varía la frecuencia de mus entre partidas más de lo que daría el azar?
+
+    Atributos:
+        chi2: estadístico de Pearson de homogeneidad (todas las partidas con la
+            misma probabilidad de mus), con ``grados`` = partidas − 1.
+        p_valor: proporción de permutaciones con un χ² igual o mayor. Con
+            partidas de pocas manos la aproximación χ² no vale; las permutaciones
+            reparten al azar las manos con mus entre las partidas, con sus tamaños.
+        factor_error: error típico de la proporción contando cada partida como un
+            bloque (estimador robusto por conglomerados) dividido por el binomial.
+            Si es ~1, el intervalo de Wilson, que supone manos independientes, vale.
+    """
+
+    chi2: float
+    grados: int
+    p_valor: Estimacion
+    factor_error: float
+
+
+def variacion_entre_partidas(partidas: Sequence[Observacion], permutaciones: int = 100_000,
+                             semilla: int = 1) -> VariacionEntrePartidas:
+    n = np.array([o.manos for o in partidas])
+    k = np.array([o.con_mus for o in partidas])
+    total, con_mus = int(n.sum()), int(k.sum())
+    if len(partidas) < 2 or con_mus in (0, total):
+        raise ValueError("Hacen falta al menos dos partidas y manos con y sin mus")
+    p = con_mus / total
+
+    def chi2(conteos: np.ndarray) -> np.ndarray:
+        return ((conteos - n * p) ** 2 / (n * p * (1 - p))).sum(axis=-1)
+
+    observado = float(chi2(k))
+    rng = np.random.default_rng(semilla)
+    manos = np.zeros(total, dtype=np.int16)
+    manos[:con_mus] = 1
+    inicios = np.concatenate(([0], np.cumsum(n)[:-1]))
+    iguales_o_mas = 0
+    for desde in range(0, permutaciones, 10_000):
+        lote = rng.permuted(np.tile(manos, (min(10_000, permutaciones - desde), 1)), axis=1)
+        iguales_o_mas += int((chi2(np.add.reduceat(lote, inicios, axis=1)) >= observado - 1e-9).sum())
+    robusta = len(n) / (len(n) - 1) * float(((k - p * n) ** 2).sum()) / total ** 2
+    return VariacionEntrePartidas(observado, len(n) - 1, Estimacion(iguales_o_mas, permutaciones),
+                                  sqrt(robusta / (p * (1 - p) / total)))
+
+
 # --- Corte por posición ----------------------------------------------------------------
 
 
@@ -161,7 +223,7 @@ def leer_cortes(ruta: str | Path = RUTA_CORTES) -> CortesPorPosicion:
     """Suma las filas del CSV por posición (columnas ``posicion``, ``habla`` y ``corta``)."""
     ruta = Path(ruta)
     if not ruta.exists():
-        raise ValueError(f"No existe {ruta}: créalo con columnas fecha,posicion,habla,corta,notas")
+        raise ValueError(f"No existe {ruta}: genéralo con python -m mus manos-reales")
     habla, corta = [0] * 4, [0] * 4
     with ruta.open(encoding="utf-8") as f:
         for fila in csv.DictReader(f):

@@ -19,6 +19,8 @@ Ejemplos::
     python -m mus grafica-posicion --salida resultados/posicion.png
     python -m mus grafica-condicion "R R C 5" --companero "sin_pares" --salida resultados/c.png
 
+    python -m mus manos-reales                           # resume datos/manos_reales.csv
+    python -m mus calibrar
     python -m mus exportar-web                           # datos de la web (Fase 4)
     python -m mus consultar-web "R C 5 4" --posicion 1 --mesa normal --senas "dos-reyes"
 
@@ -65,6 +67,8 @@ from mus.calibracion import (
     curva_hay_mus,
     leer_cortes,
     leer_observaciones,
+    leer_partidas,
+    variacion_entre_partidas,
 )
 from mus.cartas import parsear_mano
 from mus.condiciones import AYUDA_SINTAXIS, parsear_condicion
@@ -90,6 +94,14 @@ from mus.descarte import (
 )
 from mus.equity import POSICIONES, EquityMano, cargar_tabla_equity, equity, simular_equity
 from mus.evaluacion import Lance, jugada_pares, puntos_juego, resolver_mano, suma
+from mus.manos_reales import (
+    RUTA_MANOS,
+    escribir_resumenes,
+    leer_manos,
+    resumenes_desfasados,
+    resumir,
+    rondas_siguientes,
+)
 from mus.reglas import ReglasMus, Variante
 from mus.simulacion import Estimacion
 from mus.tablas import construir_tabla
@@ -580,11 +592,56 @@ def cmd_testigos(args: argparse.Namespace) -> None:
               f"{texto_conteos(d.mejor_descarte.conservadas, baraja)}")
 
 
+def _porcentaje(e: Estimacion) -> str:
+    bajo, alto = e.intervalo
+    return f"{100 * e.p:.0f} % (IC 95 %: {100 * bajo:.0f}-{100 * alto:.0f} %)"
+
+
+def cmd_manos_reales(args: argparse.Namespace) -> None:
+    manos = leer_manos(args.anotaciones)
+    resumenes = resumir(manos)
+    excluidas: dict[str, int] = {}
+    for r in resumenes:
+        for motivo, n in r.excluidas:
+            excluidas[motivo] = excluidas.get(motivo, 0) + n
+    print(f"{args.anotaciones}: {len(resumenes)} partidas y {len(manos)} manos anotadas; se excluyen "
+          f"{sum(excluidas.values())} ("
+          + ", ".join(f"{motivo}: {n}" for motivo, n in sorted(excluidas.items())) + ").")
+    total, con_mus = sum(r.manos for r in resumenes), sum(r.con_mus for r in resumenes)
+    print(f"\nPrimera ronda: mus en {con_mus} de {total} manos = "
+          f"{_porcentaje(Estimacion(con_mus, total))}.")
+    print("Cortes en la primera ronda (corta / le toca hablar): " + ", ".join(
+        f"{NOMBRE_POSICION[p]} {sum(r.corta[p - 1] for r in resumenes)} de "
+        f"{sum(r.habla[p - 1] for r in resumenes)}" for p in POSICIONES) + ".")
+    s = rondas_siguientes(manos)
+    print(f"\nRondas siguientes (dato para la Fase 6; la calibración no las usa): de las {s.con_mus} "
+          f"manos con mus, se sabe cómo siguieron {s.conocidas}.")
+    if s.conocidas:
+        print(f"  Hubo otra ronda de mus en {s.otra_ronda} de {s.conocidas} = "
+              f"{_porcentaje(Estimacion(s.otra_ronda, s.conocidas))}.")
+        print("  Rondas de mus antes del corte: "
+              + ", ".join(f"{rondas} en {n} {'mano' if n == 1 else 'manos'}"
+                          for rondas, n in s.por_rondas) + ".")
+    incluidas = [m for m in manos if not m.excluida]
+    con_posicion = [m for m in incluidas if m.mi_posicion is not None]
+    print(f"\nManos con tu posición anotada: {len(con_posicion)} de {len(incluidas)}; usando la web: "
+          f"{sum(m.usa_web is True for m in incluidas)}.")
+    print()
+    for ruta in escribir_resumenes(args.anotaciones, args.datos, args.cortes):
+        print(f"Generado {ruta}")
+
+
 def cmd_calibrar(args: argparse.Namespace) -> None:
     if args.manos is not None:
         observacion = Observacion(args.manos, args.con_mus or 0)
         origen = "datos de la línea de órdenes"
     else:
+        if ((args.datos, args.cortes) == (str(RUTA_DATOS), str(RUTA_CORTES))
+                and RUTA_MANOS.exists()):
+            desfasados = resumenes_desfasados(RUTA_MANOS, args.datos, args.cortes)
+            if desfasados:
+                print(f"AVISO: {' y '.join(map(str, desfasados))} no coinciden con {RUTA_MANOS}. "
+                      "Regenéralos con: python -m mus manos-reales\n")
         observacion = leer_observaciones(args.datos)
         origen = args.datos
     curva = curva_hay_mus(_reglas(args))
@@ -601,6 +658,13 @@ def cmd_calibrar(args: argparse.Namespace) -> None:
     if not c.dentro_del_rango:
         print("AVISO: la proporción observada queda fuera de lo que da el modelo; λ se ha "
               "recortado a 0 o 1.")
+    if args.manos is None and len(partidas := leer_partidas(args.datos)) >= 2:
+        v = variacion_entre_partidas(partidas)
+        bajo, alto = v.p_valor.intervalo
+        print(f"Variación entre las {len(partidas)} partidas: χ² = {v.chi2:.1f} con {v.grados} g.l., "
+              f"p = {v.p_valor.p:.2f} por permutaciones (IC 95 %: {bajo:.2f}-{alto:.2f}). Contando "
+              f"cada partida como un bloque, el error típico es ×{v.factor_error:.2f} el que supone "
+              "manos independientes.")
     if not c.suficiente:
         print(f"Con {observacion.manos} manos el intervalo es demasiado ancho para decidir: "
               f"conviene llegar a {MANOS_RECOMENDADAS}-50. No se cambia nada.")
@@ -865,15 +929,25 @@ def crear_parser() -> argparse.ArgumentParser:
     _argumentos_mesa(p)
     p.set_defaults(func=cmd_testigos)
 
+    p = sub.add_parser("manos-reales", help="Valida las anotaciones de partidas reales, cuenta "
+                                            "y regenera los resúmenes que usa 'calibrar'.")
+    p.add_argument("--anotaciones", default=str(RUTA_MANOS),
+                   help="CSV con una fila por mano (ver mus/manos_reales.py).")
+    p.add_argument("--datos", default=str(RUTA_DATOS), help="Resumen por partida que se genera.")
+    p.add_argument("--cortes", default=str(RUTA_CORTES),
+                   help="Cortes por partida y posición que se generan.")
+    p.set_defaults(func=cmd_manos_reales)
+
     p = sub.add_parser("calibrar", help="λ compatible con la frecuencia de mus observada en "
                                         "partidas reales (no cambia nada).")
     p.add_argument("--datos", default=str(RUTA_DATOS),
-                   help="CSV con columnas sesion,fecha,manos,con_mus,notas.")
+                   help="CSV con columnas manos y con_mus (una fila por partida); lo genera "
+                        "'manos-reales'.")
     p.add_argument("--manos", type=int, help="Manos observadas (en vez de leer el CSV).")
     p.add_argument("--con-mus", type=int, help="Manos con mus en la primera ronda.")
     p.add_argument("--cortes", default=str(RUTA_CORTES),
                    help="CSV con las veces que habla y corta cada posición (columnas "
-                        "fecha,posicion,habla,corta,notas); si existe, se compara con el modelo.")
+                        "posicion, habla y corta); si existe, se compara con el modelo.")
     p.set_defaults(func=cmd_calibrar)
 
     p = sub.add_parser("exportar-web", help="Genera los datos de la web y los ficheros de "

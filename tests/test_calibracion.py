@@ -75,6 +75,7 @@ def test_cli(monkeypatch, capsys):
 # --- Corte por posición -------------------------------------------------------------------
 
 
+# Primeros datos reales (2026-10-08, con una mano de más): solo como ejemplo fijo.
 REALES = CortesPorPosicion((45, 37, 26, 21), (8, 11, 5, 8))
 
 

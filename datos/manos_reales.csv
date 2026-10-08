@@ -1,0 +1,88 @@
+partida,numero,rondas,excluida,motivo,mi_posicion,usa_web,anotacion
+1,1,tercero,sí,primera mano,,,corto (tercero)
+1,2,mus tercero,no,,,,"mus, (luego corto tercero)"
+1,3,segundo,no,,,,corto segundo
+1,4,segundo,no,,,,corto segundo
+1,5,mus postre,no,,,,"mus,luego corto postre"
+1,6,postre,no,,,,corto postre
+1,7,segundo,no,,,,corto segundo
+2,1,mano,sí,primera mano,,,corte (al ser primera ronda es mano)
+2,2,segundo,no,,,,corte del segundo
+3,1,mano,sí,primera mano,,,corte (al ser primera ronda es mano)
+3,2,mus mus mano,no,,,,"mus,otra vez mus, corte de la mano"
+3,3,segundo,no,,,,corte del segundo
+3,4,segundo,no,,,,corte del segundo
+3,5,postre,no,,,,corte del postre
+3,6,segundo,no,,,,corte del segundo
+3,7,mano,no,,,,corte de la mano
+3,8,segundo,no,,,,corte del segundo
+3,9,mano,no,,,,corta la mano
+4,1,mano,sí,primera mano,,,corte (al ser primera ronda es mano)
+4,2,postre,no,,,,corta postre
+4,3,mano,no,,,,corta mano
+4,4,mus tercero,no,,,,"mus, luego corta tercero"
+4,5,segundo,no,,,,corta segundo
+5,1,mano,sí,primera mano,,,corte (al ser primera ronda es mano)
+5,2,postre,no,,,,corte postre
+6,1,mano,sí,primera mano,,,corte (al ser primera ronda es mano)
+6,2,mus mus segundo,no,,,,"mus, otro mus, luego corto segundo"
+6,3,mus segundo,no,,,,"mus, luego corte del segundo"
+6,4,postre,no,,,,corte del postre
+6,5,segundo,no,,,,corte del segundo
+6,6,mano,no,,,,corte de la mano
+6,7,mano,no,,,,corte de la mano
+7,1,mano,sí,primera mano,,,corte (al ser primera ronda es mano)
+7,2,mus segundo,no,,,,"mus, luego corta segundo"
+7,3,mus postre,no,,,,"mus, luego corta postre"
+7,4,tercero,no,,,,corta tercero
+7,5,tercero,no,,,,corta tercero
+7,6,postre,no,,,,corta postre
+7,7,tercero,no,,,,corta tercero
+7,8,mano,no,,,,corta mano
+7,9,tercero,no,,,,corta tercero
+7,10,segundo,no,,,,corta segundo
+8,1,mano,sí,primera mano,,,corte (al ser primera ronda es mano)
+8,2,?,sí,no recordada,,,no me acuerdo
+8,3,mus ?,no,,,,mus
+8,4,mus postre,no,,,,"mus, luego corta postre"
+9,1,mano,sí,primera mano,,,corte (al ser primera ronda es mano)
+9,2,postre,no,,,,corte postre
+9,3,postre,no,,,,corte postre
+9,4,mano,no,,,,corte mano
+9,5,mus tercero,no,,,,"mus, luego corte tercero"
+9,6,mus mus tercero,no,,,,"mus, otro mus, luego corta tercero"
+9,7,mano,no,,,,corte mano
+9,8,mus segundo,no,,,,"mus, luego corte segundo"
+10,1,mano,sí,primera mano,,,corte (mano)
+10,2,postre,no,,,,corte postre
+10,3,mus segundo,no,,,,"mus, luego corte segundo"
+10,4,mus segundo,no,,,,"mus, luego corte segundo"
+10,5,mus mus mano,no,,,,"mus, otro mus, luego corte mano"
+10,6,mus mus mus mano,no,,,,"mus, otro mus, otro mus, luego corte mano"
+10,7,segundo,no,,,,corte segundo
+10,8,mus mus mano,no,,,,"mus, otro mus, corte mano"
+11,1,mano,sí,primera mano,,,corte (mano)
+11,2,mus mus mano,no,,,,"mus, otro mus, luego corta mano"
+11,3,postre,no,,,,corte postre
+11,4,mus mus tercero,no,,,,"mus, otro mus, luego corte tercero"
+12,1,mano,sí,primera mano,,,corte (mano)
+12,2,mus mano,no,,,,"mus, luego corte mano"
+12,3,mano,no,,,,corte mano
+12,4,mus segundo,no,,,,"mus, corta segundo"
+12,5,segundo,no,,,,corte segundo
+12,6,segundo,no,,,,corte segundo
+13,1,mano,sí,primera mano,,,corte(mano)
+13,2,mano,no,,,,corte mano
+13,3,tercero,no,,,,corte tercero
+13,4,mus tercero,no,,,,"mus, luego corte tercero"
+14,1,mus mano,sí,primera mano,,,"mus, luego corte(mano)"
+14,2,mano,no,,,,corte mano
+14,3,tercero,no,,,,corte tercero
+14,4,mano,no,,,,corte mano
+15,1,mano,sí,primera mano,,,corte(mano)
+15,2,tercero,no,,,,corte tercero
+15,3,mano,no,,,,corte mano
+15,4,mano,no,,,,corte mano
+15,5,mus mano,no,,,,"mus, luego corte mano"
+15,6,segundo,no,,,,corte segundo
+15,7,tercero,no,,,,corte tercero

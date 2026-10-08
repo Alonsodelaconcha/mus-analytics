@@ -1,10 +1,16 @@
-sesion,fecha,manos,con_mus,notas
-1,,7,2,"sin la primera mano de la partida; sustituye al dato del 2026-10-07"
-2,,1,0,"sin la primera mano de la partida"
-3,,8,1,"sin la primera mano de la partida"
-4,,4,1,"sin la primera mano de la partida"
-5,,1,0,"sin la primera mano de la partida"
-6,,6,2,"sin la primera mano de la partida"
-7,,9,2,"sin la primera mano de la partida"
-8,,2,2,"sin la primera mano de la partida"
-9,,7,3,"sin la primera mano de la partida"
+partida,manos,con_mus,excluidas
+1,6,2,primera mano: 1
+2,1,0,primera mano: 1
+3,8,1,primera mano: 1
+4,4,1,primera mano: 1
+5,1,0,primera mano: 1
+6,6,2,primera mano: 1
+7,9,2,primera mano: 1
+8,2,2,no recordada: 1; primera mano: 1
+9,7,3,primera mano: 1
+10,7,5,primera mano: 1
+11,3,2,primera mano: 1
+12,5,2,primera mano: 1
+13,3,1,primera mano: 1
+14,3,0,primera mano: 1
+15,6,1,primera mano: 1

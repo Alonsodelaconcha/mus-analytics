@@ -4,3 +4,7 @@
 # Datos generados con `python -m mus exportar-web`: no se editan a mano
 web/public/datos/** linguist-generated=true
 web/test/referencia/** linguist-generated=true
+
+# Generados con `python -m mus manos-reales` a partir de datos/manos_reales.csv
+datos/mus_real.csv linguist-generated=true
+datos/cortes_por_posicion.csv linguist-generated=true
