@@ -1,61 +1,49 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { type SenaDatos } from "../nucleo/datos";
-import { Desplegable } from "./Desplegable";
 
 /**
- * "¿Qué te ha dicho tu compañero?": las señas se marcan tocándolas y se
- * combinan (el compañero cumple todas). Incluye la chuleta con los gestos.
+ * Las señas del compañero, a la vista en «Se ha cortado» (la única pestaña
+ * en la que cuentan). Se marcan tocándolas y se combinan: el compañero cumple
+ * todas. Incluye la chuleta con los gestos.
  */
 export function Senas({
   senas,
   marcadas,
   onCambio,
-  desactivadas,
   aviso,
 }: {
   senas: readonly SenaDatos[];
   marcadas: readonly string[];
   onCambio: (ids: string[]) => void;
-  /** Tras el mus las señas aún no se tienen en cuenta. */
-  desactivadas: boolean;
   /** Problema con las señas marcadas (imposibles juntas o con tus cartas). */
   aviso: string | null;
 }) {
   const [chuleta, setChuleta] = useState(false);
-  const nombres = senas.filter((s) => marcadas.includes(s.id)).map((s) => s.nombre);
-  const resumen = desactivadas ? "No se usan tras el mus" : nombres.length === 0 ? "Ninguna" : nombres.join(" + ");
+  const idTitulo = useId();
 
   const alternar = (id: string): void => {
     onCambio(marcadas.includes(id) ? marcadas.filter((x) => x !== id) : [...marcadas, id]);
   };
 
   return (
-    <section className="bloque" aria-label="Señas del compañero">
-      <Desplegable titulo="¿Qué te ha dicho tu compañero?" resumen={resumen}>
-        {desactivadas ? (
-          <p className="nota">
-            Tras el mus, las señas todavía no se tienen en cuenta: las probabilidades son sin
-            información del compañero. Llegará en una versión posterior.
-          </p>
-        ) : (
-          <>
-            <p className="nota">Marca todas las señas que te haya hecho. Si no te ha hecho ninguna, no marques nada.</p>
-            <div className="senas">
-              {senas.map((s) => (
-                <button key={s.id} type="button" className="sena" aria-pressed={marcadas.includes(s.id)}
-                  onClick={() => { alternar(s.id); }}>
-                  {s.nombre}
-                </button>
-              ))}
-            </div>
-            {aviso !== null && <p className="aviso" role="status">{aviso}</p>}
-          </>
-        )}
+    <section className="bloque" aria-labelledby={idTitulo}>
+      <div className="senas__cabecera">
+        <h2 className="bloque__titulo" id={idTitulo}>Señas de tu compañero</h2>
         <button type="button" className="boton boton--enlace" onClick={() => { setChuleta(true); }}>
-          Ver la chuleta de señas
+          Chuleta
         </button>
-      </Desplegable>
+      </div>
+      <p className="nota senas__nota">Marca todas las que te haya hecho.</p>
+      <div className="senas">
+        {senas.map((s) => (
+          <button key={s.id} type="button" className="sena" aria-pressed={marcadas.includes(s.id)}
+            onClick={() => { alternar(s.id); }}>
+            {s.nombre}
+          </button>
+        ))}
+      </div>
+      {aviso !== null && <p className="aviso" role="status">{aviso}</p>}
       {chuleta && <Chuleta senas={senas} onCerrar={() => { setChuleta(false); }} />}
     </section>
   );

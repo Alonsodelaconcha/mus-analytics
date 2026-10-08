@@ -4,9 +4,10 @@ import { leerMano } from "../src/nucleo/cartas";
 import { opcionesDescarte } from "../src/nucleo/descarte";
 import {
   conSigno,
-  describirJuego,
+  describirMano,
   describirPares,
   frecuencia,
+  frecuenciaCorta,
   porcentaje,
   tantosPorMano,
   textoOpcion,
@@ -32,6 +33,12 @@ describe("cifras", () => {
       "unas 9 de cada 10 veces",
       "casi siempre",
       "siempre",
+    ]);
+  });
+
+  it("frecuencias en corto, con los mismos cortes", () => {
+    expect([0, 0.004, 0.07, 0.1, 0.34, 0.66, 0.94, 0.96, 1].map(frecuenciaCorta)).toEqual([
+      "nunca", "casi nunca", "1 de 14", "1 de 10", "3 de 10", "7 de 10", "9 de 10", "casi siempre", "siempre",
     ]);
   });
 
@@ -64,9 +71,10 @@ describe("jugadas", () => {
     expect(describirPares(leerMano(mano))).toBe(texto);
   });
 
-  it("juego y punto", () => {
-    expect(describirJuego(leerMano("R C S A"))).toBe("31 de juego");
-    expect(describirJuego(leerMano("R C 5 4"))).toBe("Sin juego: 29 al punto");
+  it("la mano en dos datos: pares y juego o punto", () => {
+    expect(describirMano(leerMano("R C S A"))).toEqual(["Sin pares", "31 de juego"]);
+    expect(describirMano(leerMano("R R C S"))).toEqual(["Par de reyes", "40 de juego"]);
+    expect(describirMano(leerMano("R C 5 4"))).toEqual(["Sin pares", "29 al punto"]);
   });
 });
 

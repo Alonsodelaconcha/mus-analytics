@@ -24,19 +24,31 @@ export function porcentaje(p: number): string {
   return `${ENTERO.format(p * 100)}${NBSP}%`;
 }
 
+/** Una probabilidad redondeada a "x de cada y" o, en los extremos, a palabras. */
+function aproximar(p: number): string | { readonly veces: number; readonly de: number } {
+  if (p <= 0) return "nunca";
+  if (p >= 1) return "siempre";
+  if (p < 0.01) return "casi nunca";
+  if (p < 0.095) return { veces: 1, de: Math.round(1 / p) };
+  if (p >= 0.95) return "casi siempre";
+  return { veces: Math.min(9, Math.max(1, Math.round(p * 10))), de: 10 };
+}
+
 /**
  * Frecuencia en palabras: "unas 7 de cada 10 veces", "1 de cada 14 veces",
  * "casi siempre"... Se redondea a propósito: es una ayuda para la mesa, no
  * un dato de precisión.
  */
 export function frecuencia(p: number): string {
-  if (p <= 0) return "nunca";
-  if (p >= 1) return "siempre";
-  if (p < 0.01) return "casi nunca";
-  if (p < 0.095) return `1 de cada ${ENTERO.format(Math.round(1 / p))} veces`;
-  if (p >= 0.95) return "casi siempre";
-  const deDiez = Math.min(9, Math.max(1, Math.round(p * 10)));
-  return deDiez === 1 ? "1 de cada 10 veces" : `unas ${deDiez} de cada 10 veces`;
+  const f = aproximar(p);
+  if (typeof f === "string") return f;
+  return f.veces === 1 ? `1 de cada ${String(f.de)} veces` : `unas ${String(f.veces)} de cada ${String(f.de)} veces`;
+}
+
+/** La misma frecuencia en corto, para las celdas estrechas: "9 de 10", "1 de 14", "casi nunca". */
+export function frecuenciaCorta(p: number): string {
+  const f = aproximar(p);
+  return typeof f === "string" ? f : `${String(f.veces)} de ${String(f.de)}`;
 }
 
 /** Número con signo y decimales fijos ("+1,24", "−0,07"). */
@@ -109,10 +121,10 @@ export function describirPares(mano: Conteos): string {
   }
 }
 
-/** "31 de juego", "Sin juego: 28 al punto". */
-export function describirJuego(mano: Conteos): string {
+/** La jugada en dos datos: ["Par de reyes", "31 de juego"], ["Sin pares", "29 al punto"]. */
+export function describirMano(mano: Conteos): [string, string] {
   const s = suma(mano);
-  return s >= 31 ? `${s} de juego` : `Sin juego: ${s} al punto`;
+  return [describirPares(mano), s >= 31 ? `${String(s)} de juego` : `${String(s)} al punto`];
 }
 
 /** Cartas que se conservan y se tiran en una opción de descarte, y cuántas se piden. */

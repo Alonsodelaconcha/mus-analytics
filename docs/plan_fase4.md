@@ -83,7 +83,7 @@ Las limitaciones (sin señas tras el mus, sin tener en cuenta quién ha cortado)
 
 ## Propuesta de estructura A: una pestaña por momento de la mano (2026-10-08)
 
-Guardada a petición del usuario, tal como se le presentó. **Pendiente de su visto bueno**: no se ha implementado.
+Guardada a petición del usuario, tal como se le presentó. **Elegida por el usuario e implementada el 2026-10-08**, con los cambios de "Decisiones del usuario sobre la estructura A" (al final).
 
 **Por qué.** Al abrir los desplegables hay que desplazarse mucho, y el bloque de señas, encima del veredicto, parecía influir en la recomendación. En la mesa hay tres momentos, y cada uno necesita cosas distintas:
 1. **Decidir mus o corto:** importan la recomendación y el descarte.
@@ -114,11 +114,25 @@ Así las señas solo están donde cuentan, y no pueden parecer parte de la recom
 
 **Alternativa presentada junto a esta (B):** todo de un vistazo, con el veredicto, el mejor descarte y una fila de probabilidades sin señas. La barra inferior lleva «Han cortado», «Ha habido mus» y «Nueva mano», y «Han cortado» abre una hoja desde abajo con las señas y las probabilidades con señas. Se recomendó A: sigue el orden de la mano y separa las señas de la recomendación por diseño. B se lee más rápido pero esconde más tras un toque.
 
-**Pendiente de decidir con el usuario antes de implementarla:**
-1. Si elige A.
-2. En «Se ha cortado»: las probabilidades en palabras («unas 9 de cada 10 veces») o la fila de cinco cifras, con las palabras al tocar cada lance.
-3. Si al completar las 4 cartas la web debe abrir sola la pestaña «¿Mus o corto?».
+**Decidido por el usuario (2026-10-08):**
+1. ~~Si elige A.~~ **Elige A.**
+2. ~~Formato de las probabilidades en «Se ha cortado».~~ **Una fila con los cinco lances**: en cada uno, el porcentaje de la pareja y debajo la frecuencia corta («9 de 10»). Al tocar un lance, la frase completa y la probabilidad individual.
+3. ~~Si al completar las 4 cartas se abre sola «¿Mus o corto?».~~ **No: completar las cartas nunca cambia de pestaña** (en «Ha habido mus» se meten las cartas nuevas y saltar a la recomendación sería un error). **«Nueva mano» abre «¿Mus o corto?».**
 
-**Otras cosas pendientes de esta fase:**
-- **Script de capturas.** Puede valer la pena guardar en el repositorio un script de capturas a tamaño de móvil, para las comprobaciones visuales y para las capturas del README en el paso 4. El navegador del panel da capturas con mosaicos repetidos. Es una idea, sin decidir.
-- **IP de la red local.** Cambia con la red Wi-Fi (172.20.10.2 en la zona compartida del móvil; 192.168.1.37 en otra). Hay que usar siempre la que muestra `npm run movil-final`.
+**Otras cosas de esta fase:**
+- **Script de capturas: hecho.** `web/scripts/capturas.mjs` (`npm run capturas`), sin dependencias, con Edge. Se usará en cada revisión y para las capturas del README en el paso 4.
+- **IP de la red local:** el aviso de que cambia con la red Wi-Fi está ahora en la sección de entorno de `CLAUDE.md`.
+
+## Decisiones del usuario sobre la estructura A (2026-10-08)
+
+1. **Pestañas al alcance del pulgar:** en la barra de abajo (donde estaba «Ha habido mus»), no bajo la mano. Encima de ellas, el teclado mientras faltan cartas o «Nueva mano» con la mano completa.
+2. **Aviso de las señas en «¿Mus o corto?»:** en esa pestaña no se marcan señas, pero el compañero las hace antes de decidir. Va una línea fija: «No tiene en cuenta las señas de tu compañero».
+3. **Cambios de pestaña:**
+   - «Nueva mano» abre «¿Mus o corto?».
+   - Completar las 4 cartas nunca cambia de pestaña.
+   - Pasar a «Se ha cortado» conserva las cartas.
+   - Pasar a «Ha habido mus» las vacía y quita las señas.
+   - La mano repartida se guarda: si se vuelve de «Ha habido mus» a «¿Mus o corto?» o a «Se ha cortado» (un toque equivocado), se restaura. *Se restaura con sus señas: ver `docs/decisiones.md`.*
+   - La posición no cambia al cambiar de pestaña.
+4. **Probabilidades en «Se ha cortado»:** la fila de cinco lances descrita arriba.
+5. **Tests del flujo** para los cambios de pestaña, la restauración de la mano y que completar las cartas no cambia de pestaña.

@@ -21,7 +21,10 @@
   --barra-pareja: #7fb596;
   --sombra: 0 1px 3px rgb(0 0 0 / 12%);
   --radio: 14px;
-  --teclado-alto: 15.5rem;
+  /* Alto del pie fijo (teclado o «Nueva mano», más las pestañas), para que no tape nada. */
+  --pestanas-alto: 4.3rem;
+  --teclado-alto: 14.9rem;
+  --acciones-alto: 4rem;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 17px;
   line-height: 1.45;
@@ -88,18 +91,28 @@ h1, h2, h3 {
 .app {
   max-width: 34rem;
   margin: 0 auto;
-  padding: 0 1rem calc(5.5rem + env(safe-area-inset-bottom));
+  padding: 0 1rem calc(var(--acciones-alto) + var(--pestanas-alto) + 1rem + env(safe-area-inset-bottom));
 }
 
-.app[data-teclado] {
-  padding-bottom: calc(var(--teclado-alto) + 1rem + env(safe-area-inset-bottom));
+.app[data-pie="teclado"] {
+  padding-bottom: calc(var(--teclado-alto) + var(--pestanas-alto) + 1rem + env(safe-area-inset-bottom));
+}
+
+/* Solo para lectores de pantalla. */
+.solo-lector {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .cabecera {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 0.9rem 0 0.6rem;
+  padding: 0.6rem 0 0.4rem;
 }
 
 .cabecera h1 {
@@ -117,8 +130,8 @@ h1, h2, h3 {
   border: 1px solid var(--borde);
   border-radius: var(--radio);
   box-shadow: var(--sombra);
-  padding: 1rem;
-  margin-bottom: 0.9rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.8rem;
 }
 
 .bloque--discreto {
@@ -223,16 +236,26 @@ h1, h2, h3 {
 }
 
 .carta--pequena {
-  width: 2.4rem;
-  font-size: 1.2rem;
-  border-radius: 7px;
+  width: 2.55rem;
+  font-size: 1.4rem;
+  border-radius: 8px;
+}
+
+/* La mano compacta: las cartas a la izquierda y la jugada a la derecha. */
+.mano__fila {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .mano__cartas {
   display: flex;
-  justify-content: center;
-  gap: 0.6rem;
-  margin: 0.2rem 0 0.4rem;
+  gap: 0.3rem;
+  flex: none;
+}
+
+.mano__info {
+  min-width: 0;
 }
 
 .mano__hueco {
@@ -243,14 +266,21 @@ h1, h2, h3 {
 }
 
 .mano__jugada {
-  text-align: center;
-  font-weight: 600;
-  min-height: 1.5em;
-  margin: 0.3rem 0 0.8rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  margin: 0;
 }
 
-.mano__jugada:empty {
-  display: none;
+.mano__contexto {
+  color: var(--suave);
+  font-size: 0.85rem;
+  line-height: 1.3;
+  margin: 0.2rem 0 0;
+}
+
+.mano__linea {
+  display: block;
 }
 
 /* --- Selector segmentado ------------------------------------------------------------- */
@@ -297,9 +327,9 @@ h1, h2, h3 {
   font-size: 0.9rem;
 }
 
-/* --- Teclado de cartas (fijo abajo) ------------------------------------------------------ */
+/* --- Pie fijo: teclado o «Nueva mano», y debajo las pestañas ----------------------------- */
 
-.teclado {
+.pie {
   position: fixed;
   left: 0;
   right: 0;
@@ -308,7 +338,66 @@ h1, h2, h3 {
   background: var(--superficie);
   border-top: 1px solid var(--borde);
   box-shadow: 0 -2px 10px rgb(0 0 0 / 10%);
-  padding: 0.5rem max(0.75rem, calc((100vw - 34rem) / 2)) calc(0.6rem + env(safe-area-inset-bottom));
+  padding: 0 max(0.75rem, calc((100vw - 34rem) / 2)) calc(0.45rem + env(safe-area-inset-bottom));
+}
+
+.teclado {
+  padding-top: 0.5rem;
+}
+
+.pie__acciones {
+  display: flex;
+  padding-top: 0.5rem;
+}
+
+.pie__acciones .boton {
+  flex: 1;
+}
+
+.pestanas {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 0.25rem;
+}
+
+.pestana {
+  flex: 1;
+  min-height: 3.3rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.15rem;
+  line-height: 1.15;
+  touch-action: manipulation;
+}
+
+.pestana__titulo {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.pestana__subtitulo {
+  font-size: 0.72rem;
+  color: var(--suave);
+  margin-top: 0.15rem;
+}
+
+.pestana[aria-selected="true"] {
+  background: var(--acento);
+  color: var(--acento-texto);
+}
+
+.pestana[aria-selected="true"] .pestana__subtitulo {
+  color: inherit;
+  opacity: 0.85;
 }
 
 .teclado__titulo {
@@ -367,23 +456,6 @@ h1, h2, h3 {
   margin-top: 0.45rem;
 }
 
-.barra-inferior {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 10;
-  display: flex;
-  gap: 0.5rem;
-  background: var(--superficie);
-  border-top: 1px solid var(--borde);
-  padding: 0.6rem max(0.75rem, calc((100vw - 34rem) / 2)) calc(0.6rem + env(safe-area-inset-bottom));
-}
-
-.barra-inferior .boton {
-  flex: 1;
-}
-
 /* --- Desplegables -------------------------------------------------------------------- */
 
 .desplegable__boton {
@@ -427,16 +499,38 @@ h1, h2, h3 {
 
 /* --- Señas --------------------------------------------------------------------------- */
 
-.senas {
+.senas__cabecera {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.senas__cabecera .bloque__titulo {
+  margin-bottom: 0;
+}
+
+.senas__cabecera .boton--enlace {
+  min-height: 0;
+  padding: 0.2rem;
+}
+
+.senas__nota {
+  margin: 0 0 0.2rem;
+}
+
+.senas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.45rem;
   margin: 0.5rem 0;
 }
 
+/* 44 px de alto: el mínimo cómodo para el dedo, para que quepan con la fila de lances. */
 .sena {
-  min-height: 2.75rem;
-  padding: 0.4rem 0.85rem;
+  min-height: 2.6rem;
+  padding: 0.3rem 0.4rem;
+  line-height: 1.2;
   border-radius: 999px;
   border: 2px solid var(--borde);
   background: var(--superficie-2);
@@ -764,4 +858,61 @@ h1, h2, h3 {
   padding-top: 0.6rem;
   border-top: 1px solid var(--borde);
   font-weight: 600;
+}
+
+/* Las cinco probabilidades en una fila («Se ha cortado»); al tocar un lance, el detalle. */
+.fila-lances {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+}
+
+.fila-lances__lance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.45rem 0.1rem;
+  border: 2px solid var(--borde);
+  border-radius: 10px;
+  background: var(--superficie-2);
+  line-height: 1.15;
+  touch-action: manipulation;
+}
+
+.fila-lances__lance[aria-pressed="true"] {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+}
+
+.fila-lances__nombre {
+  font-size: 0.78rem;
+  color: var(--suave);
+}
+
+.fila-lances__cifra {
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.fila-lances__frecuencia {
+  font-size: 0.72rem;
+  color: var(--suave);
+  text-align: center;
+}
+
+.fila-lances__lance[data-sin-jugar] .fila-lances__cifra {
+  color: var(--suave);
+}
+
+.fila-lances__detalle {
+  min-height: 3.2rem;
+  padding: 0.55rem 0 0;
+  /* Al desplazarse hasta el detalle, que no quede tapado por el pie fijo. */
+  scroll-margin-bottom: calc(var(--acciones-alto) + var(--pestanas-alto) + 1rem);
+}
+
+.fila-lances__detalle .nota {
+  margin: 0;
 }

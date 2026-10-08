@@ -115,6 +115,7 @@ describe("probabilidades de ganar", async () => {
     const v = vistaProbabilidades(e, mano);
     expect(v.lances.map((l) => l.nombre)).toEqual(["Grande", "Chica", "Pares", "Juego", "Punto"]);
     expect(v.lances[0]?.frase).toBe("Ganáis la grande unas 6 de cada 10 veces.");
+    expect(v.lances[0]).toMatchObject({ frecuenciaCorta: "6 de 10", sinJugar: false });
     expect(v.lances[4]?.nota).toMatch(/^Solo se juega si nadie tiene juego/);
     expect(v.fraseTantos).toMatch(/^La otra pareja saca de media unos 1,1 tantos más/);
   });
@@ -124,6 +125,8 @@ describe("probabilidades de ganar", async () => {
     const e = equityDe(reparto.datos, escalas, indiceMano(mano), 1);
     if (e === null) throw new Error("sin datos");
     const punto = vistaProbabilidades(e, mano).lances[4];
-    expect(punto).toMatchObject({ frase: "No hay punto: tienes juego.", nota: "", seJuega: 0 });
+    expect(punto).toMatchObject({
+      frase: "No hay punto: tienes juego.", nota: "", seJuega: 0, sinJugar: true, frecuenciaCorta: "no se juega",
+    });
   });
 });

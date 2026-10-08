@@ -24,7 +24,7 @@ import {
   resumenDistribucion,
 } from "../nucleo/descarte";
 import { LANCES, type Lance, suma } from "../nucleo/evaluacion";
-import { frecuencia, porcentaje, tantosPorMano, textoOpcion } from "./lenguaje";
+import { frecuencia, frecuenciaCorta, porcentaje, tantosPorMano, textoOpcion } from "./lenguaje";
 
 const HASTA_UN_DECIMAL = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
 
@@ -157,8 +157,12 @@ export interface VistaLance {
   /** Probabilidad de ganarlo yo. */
   readonly yo: number;
   readonly seJuega: number;
+  /** No se juega seguro (el punto, si tienes juego). */
+  readonly sinJugar: boolean;
   /** "Ganáis la grande unas 7 de cada 10 veces". */
   readonly frase: string;
+  /** La frecuencia de ganarlo la pareja en corto: "7 de 10". */
+  readonly frecuenciaCorta: string;
   /** Aclaración para el punto o los lances que pueden no jugarse. */
   readonly nota: string;
   readonly tantos: number;
@@ -185,7 +189,19 @@ export function vistaProbabilidades(e: EquityMano, mano: Conteos): VistaProbabil
     const frase = lance === "punto" && tengoJuego
       ? "No hay punto: tienes juego."
       : `Ganáis ${con} ${frecuencia(x.ganaPareja)}.`;
-    return { lance, nombre, pareja: x.ganaPareja, yo: x.ganaIndividual, seJuega: x.seJuega, frase, nota, tantos: x.tantos };
+    const sinJugar = x.seJuega === 0;
+    return {
+      lance,
+      nombre,
+      pareja: x.ganaPareja,
+      yo: x.ganaIndividual,
+      seJuega: x.seJuega,
+      sinJugar,
+      frase,
+      frecuenciaCorta: sinJugar ? "no se juega" : frecuenciaCorta(x.ganaPareja),
+      nota,
+      tantos: x.tantos,
+    };
   });
   const tantos = tantosTotales(e);
   const fraseTantos = Math.abs(tantos) < 0.05

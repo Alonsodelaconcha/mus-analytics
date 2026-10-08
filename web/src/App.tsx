@@ -1,15 +1,16 @@
 import { type ReactNode, useMemo, useReducer, useState } from "react";
 
-import { Carta } from "./componentes/Carta";
 import { Decision, SelectorMesa } from "./componentes/Decision";
 import { Descartes } from "./componentes/Descartes";
+import { FilaLances } from "./componentes/FilaLances";
 import { Limitaciones } from "./componentes/Limitaciones";
+import { ID_PANEL, Pestanas, idPestana } from "./componentes/Pestanas";
 import { Probabilidades } from "./componentes/Probabilidades";
-import { Segmentado } from "./componentes/Segmentado";
 import { Senas } from "./componentes/Senas";
 import { Teclado } from "./componentes/Teclado";
+import { POSICIONES, TuMano } from "./componentes/TuMano";
 import { type Recurso, usePreferencia, usePromesa } from "./estado";
-import { ESTADO_INICIAL, reducirMano } from "./mano";
+import { ESTADO_INICIAL, type Pestana, cartasDe, reducirMano } from "./mano";
 import { desdeRangos, rangos } from "./nucleo/cartas";
 import {
   type Cargador,
@@ -22,7 +23,7 @@ import {
 } from "./nucleo/datos";
 import { tablaParaSenas } from "./nucleo/senas";
 import { indiceMano } from "./nucleo/tablas";
-import { describirJuego, describirPares } from "./vista/lenguaje";
+import { describirMano } from "./vista/lenguaje";
 import {
   probabilidadesTrasDescarte,
   vistaDecision,
@@ -30,28 +31,26 @@ import {
   vistaProbabilidades,
 } from "./vista/vista";
 
-const POSICIONES = [
-  { valor: 1, texto: "Mano" },
-  { valor: 2, texto: "Segundo" },
-  { valor: 3, texto: "Tercero" },
-  { valor: 4, texto: "Postre" },
-] as const;
-
 const esTexto = (v: string): v is string => v.length > 0;
 
 /**
- * La calculadora: una sola pantalla pensada para el móvil. Arriba, la mano,
- * la posición y las señas; debajo, los resultados; abajo del todo, fijo, el
- * teclado de cartas para usarlo con el pulgar.
+ * La calculadora, pensada para el móvil. Arriba, la mano y la posición; en
+ * medio, lo que toca en cada momento de la mano; abajo, fijos para el pulgar,
+ * el teclado de cartas (o «Nueva mano») y las tres pestañas:
+ *
+ * - «¿Mus o corto?»: la recomendación y el descarte;
+ * - «Se ha cortado»: las señas y las probabilidades con las cartas del reparto;
+ * - «Ha habido mus»: las cartas nuevas y las probabilidades tras el mus.
  */
 export function App({ cargador }: { cargador: Cargador }) {
   // Reintentar (p. ej. al volver la cobertura) crea una carga nueva.
   const [promesaDatos, setPromesaDatos] = useState(() => Datos.cargar(cargador));
   const datos = usePromesa(promesaDatos);
 
-  // Todas las reglas de la mano (también el giro de la posición) están en mano.ts.
+  // Todas las reglas de la mano (pestañas, giro de la posición...) están en mano.ts.
   const [estado, despachar] = useReducer(reducirMano, ESTADO_INICIAL);
-  const { cartas, posicion, huboMus, senas, giro } = estado;
+  const { pestana, posicion, senas, giro } = estado;
+  const cartas = cartasDe(estado);
   const [mesaGuardada, setMesa] = usePreferencia("mus-analytics.mesa", "normal", esTexto);
 
   const d = datos.estado === "listo" ? datos.valor : null;
@@ -59,14 +58,16 @@ export function App({ cargador }: { cargador: Cargador }) {
   const mesaId = manifiesto?.mesas.some((m) => m.id === mesaGuardada) === true
     ? mesaGuardada
     : (manifiesto?.mesas.find((m) => m.por_defecto)?.id ?? mesaGuardada);
+  const nombreMesa = manifiesto?.mesas.find((m) => m.id === mesaId)?.nombre ?? "";
 
   const mano = useMemo(() => desdeRangos(cartas), [cartas]);
   const completa = cartas.length === 4;
   const indice = completa ? indiceMano(mano) : null;
 
+  // Las señas solo cuentan en «Se ha cortado».
   const resultadoSenas = useMemo(
-    () => (manifiesto !== null && !huboMus ? tablaParaSenas(manifiesto, senas) : null),
-    [manifiesto, huboMus, senas],
+    () => (manifiesto !== null && pestana === "cortado" ? tablaParaSenas(manifiesto, senas) : null),
+    [manifiesto, pestana, senas],
   );
   const promesaEquity = useMemo(
     () => (d !== null && resultadoSenas !== null && resultadoSenas.tipo !== "imposible"
@@ -78,7 +79,7 @@ export function App({ cargador }: { cargador: Cargador }) {
   const promesaMesa = useMemo(() => (d !== null ? d.mesa(mesaId) : null), [d, mesaId]);
   const mesa = usePromesa(promesaMesa);
 
-  // Equity de mi mano (sin mus): null si las señas son imposibles con mis cartas.
+  // Equity de mi mano con las cartas del reparto: null si las señas son imposibles con mis cartas.
   const miEquity = equity.estado === "listo" && indice !== null && posicion !== null && manifiesto !== null
     ? equityDe(equity.valor.datos, manifiesto.escalas, indice, posicion)
     : undefined;
@@ -89,21 +90,39 @@ export function App({ cargador }: { cargador: Cargador }) {
     avisoSenas = "Con tus cartas, tu compañero no puede tener eso: revisa las señas.";
   }
 
-  // Con un reducer, dos toques muy seguidos no pueden pisarse.
-  const nuevaMano = (): void => { despachar({ tipo: "nueva-mano" }); };
-  const cambiarMus = (si: boolean): void => { despachar({ tipo: "mus", si }); };
+  // Con un reducer, dos toques muy seguidos no pueden pisarse. Al cambiar de
+  // momento de la mano, se vuelve arriba para ver la pestaña desde el principio.
+  const subir = (): void => {
+    if (window.scrollY > 0) window.scrollTo({ top: 0 });
+  };
+  const nuevaMano = (): void => {
+    despachar({ tipo: "nueva-mano" });
+    subir();
+  };
+  const cambiarPestana = (p: Pestana): void => {
+    despachar({ tipo: "pestana", pestana: p });
+    subir();
+  };
 
   const nombre = (p: number | null): string => POSICIONES.find((x) => x.valor === p)?.texto ?? "";
   const nombrePosicion = nombre(posicion);
   const selectorMesa = manifiesto !== null && (
     <SelectorMesa mesas={manifiesto.mesas} valor={mesaId} onCambio={setMesa} />
   );
+  const trasMus = pestana === "mus";
+  // Junto a la mano: de qué cartas se trata y, donde cuenta, el tipo de mesa.
+  const lineaMesa = nombreMesa === "" ? [] : [`Mesa: ${nombreMesa.toLowerCase()}`];
+  const contexto = {
+    decidir: lineaMesa,
+    cortado: ["Cartas del reparto"],
+    mus: ["Cartas tras el mus", ...lineaMesa],
+  }[pestana];
 
-  let resultados: ReactNode;
+  let panel: ReactNode;
   if (datos.estado === "cargando" || datos.estado === "inactivo") {
-    resultados = <p className="pista">Cargando datos…</p>;
+    panel = <p className="pista">Cargando datos…</p>;
   } else if (datos.estado === "error") {
-    resultados = (
+    panel = (
       <div className="bloque aviso" role="alert">
         <p>No se han podido cargar los datos: {datos.error}</p>
         <button type="button" className="boton" onClick={() => { setPromesaDatos(Datos.cargar(cargador)); }}>
@@ -111,149 +130,131 @@ export function App({ cargador }: { cargador: Cargador }) {
         </button>
       </div>
     );
-  } else if (!completa) {
-    resultados = (
-      <p className="pista">
-        {huboMus ? "Mete las 4 cartas que tienes después del mus." : "Mete tus 4 cartas con el teclado de abajo."}
-      </p>
-    );
-  } else if (posicion === null || indice === null || manifiesto === null) {
-    resultados = <p className="pista pista--destacada">¿En qué posición estás? Elígela arriba.</p>;
-  } else if (!huboMus) {
-    resultados = (
-      <>
-        <ConMesa mesa={mesa} que="la recomendación" plural={false}>
+  } else if (manifiesto === null) {
+    panel = null;
+  } else {
+    let resultados: ReactNode;
+    if (!completa) {
+      resultados = (
+        <p className="pista">
+          {trasMus ? "Mete las 4 cartas que tienes después del mus." : "Mete tus 4 cartas con el teclado de abajo."}
+        </p>
+      );
+    } else if (posicion === null || indice === null) {
+      resultados = <p className="pista pista--destacada">¿En qué posición estás? Elígela arriba.</p>;
+    } else if (pestana === "decidir") {
+      resultados = (
+        <>
+          <ConMesa mesa={mesa} que="la recomendación" plural={false}>
+            {(m) => {
+              const decision = decisionDe(m, manifiesto.escalas, indice, posicion);
+              return decision === null
+                ? <p className="pista">No hay recomendación para esta mano.</p>
+                : <Decision vista={vistaDecision(decision)} posicion={nombrePosicion} selectorMesa={selectorMesa} />;
+            }}
+          </ConMesa>
+          <ConMesa mesa={mesa} que="los descartes" plural>
+            {(m) => (
+              <BloqueDescartes key={`${String(indice)}-${String(posicion)}-${mesaId}`} mesa={m}
+                manifiesto={manifiesto} mano={mano} indice={indice} posicion={posicion} />
+            )}
+          </ConMesa>
+        </>
+      );
+    } else if (pestana === "cortado") {
+      resultados = avisoSenas !== null ? (
+        <p className="pista">Corrige las señas para ver las probabilidades de ganar.</p>
+      ) : miEquity === undefined || miEquity === null ? (
+        <Estado recurso={equity} que="las probabilidades" plural />
+      ) : (
+        <FilaLances
+          titulo="Si se juega con estas cartas, ganáis…"
+          nota={resultadoSenas?.tipo === "tabla" ? "Exacto, con las señas marcadas." : "Exacto, sin señas de tu compañero."}
+          vista={vistaProbabilidades(miEquity, mano)}
+        />
+      );
+    } else {
+      resultados = (
+        <ConMesa mesa={mesa} que="las probabilidades" plural>
           {(m) => {
-            const decision = decisionDe(m, manifiesto.escalas, indice, posicion);
-            return decision === null
-              ? <p className="pista">No hay recomendación para esta mano.</p>
-              : <Decision vista={vistaDecision(decision)} posicion={nombrePosicion} selectorMesa={selectorMesa}
-                  senasIgnoradas={senas.length > 0} />;
+            const e = equityDe(m.tras_mus.datos, manifiesto.escalas, indice, posicion);
+            return e === null ? null : (
+              <Probabilidades
+                titulo="Tras el mus"
+                subtitulo={
+                  <>
+                    Frente a lo que suelen llevar los demás tras descartarse en una mesa
+                    «{nombreMesa}». Sin señas: llegarán en una versión posterior.
+                  </>
+                }
+                vista={vistaProbabilidades(e, mano)}
+                pie={selectorMesa}
+              />
+            );
           }}
         </ConMesa>
-        <ConMesa mesa={mesa} que="los descartes" plural>
-          {(m) => (
-            <BloqueDescartes key={`${String(indice)}-${String(posicion)}-${mesaId}`} mesa={m}
-              manifiesto={manifiesto} mano={mano} indice={indice} posicion={posicion} />
-          )}
-        </ConMesa>
-        {avisoSenas !== null ? (
-          <p className="pista">Corrige las señas para ver las probabilidades de ganar.</p>
-        ) : miEquity === undefined || miEquity === null ? (
-          <Estado recurso={equity} que="las probabilidades" plural />
-        ) : (
-          <Probabilidades
-            titulo="Si se juega con estas cartas"
-            subtitulo={
-              <>
-                Exacto, si alguien corta y se juega con las cartas del reparto.{" "}
-                {resultadoSenas?.tipo === "tabla"
-                  ? `Sabiendo que tu compañero tiene: ${nombresSenas(manifiesto, senas)}.`
-                  : "Sin información de tu compañero."}
-              </>
-            }
-            vista={vistaProbabilidades(miEquity, mano)}
-          />
+      );
+    }
+    panel = (
+      <>
+        {pestana === "cortado" && (
+          <Senas senas={manifiesto.senas} marcadas={senas} aviso={avisoSenas}
+            onCambio={(ids) => { despachar({ tipo: "senas", ids }); }} />
         )}
+        {resultados}
       </>
-    );
-  } else {
-    resultados = (
-      <ConMesa mesa={mesa} que="las probabilidades" plural>
-        {(m) => {
-          const e = equityDe(m.tras_mus.datos, manifiesto.escalas, indice, posicion);
-          return e === null ? null : (
-            <Probabilidades
-              titulo="Tras el mus"
-              subtitulo={
-                <>
-                  Con las cartas que tienes después del mus, frente a lo que suelen llevar los
-                  demás tras descartarse en una mesa «{manifiesto.mesas.find((x) => x.id === mesaId)?.nombre}».
-                  Sin señas: todavía no se tienen en cuenta tras el mus.
-                </>
-              }
-              vista={vistaProbabilidades(e, mano)}
-              pie={selectorMesa}
-            />
-          );
-        }}
-      </ConMesa>
     );
   }
 
   return (
-    <div className="app" data-teclado={completa ? undefined : "si"}>
+    <div className="app" data-pie={completa ? "corto" : "teclado"}>
       <header className="cabecera">
         <h1>Mus Analytics</h1>
         <span className="cabecera__variante">Mus a 8 reyes</span>
       </header>
 
       <main>
-        <section className="bloque mano" aria-labelledby="titulo-mano">
-          <h2 className="bloque__titulo" id="titulo-mano">{huboMus ? "Tu mano después del mus" : "Tu mano"}</h2>
-          <div className="mano__cartas">
-            {[0, 1, 2, 3].map((i) => {
-              const r = rangos(mano)[i];
-              return r === undefined ? (
-                <Carta key={i} rango={null} />
-              ) : (
-                <button key={i} type="button" className="mano__hueco"
-                  onClick={() => { despachar({ tipo: "quitar", rango: r }); }}
-                  aria-label={`Quitar carta ${String(i + 1)}`}>
-                  <Carta rango={r} />
-                </button>
-              );
-            })}
-          </div>
-          <p className="mano__jugada" aria-live="polite">
-            {completa ? `${describirPares(mano)} · ${describirJuego(mano)}` : "El 3 cuenta como rey y el 2 como as. Toca una carta para quitarla."}
-          </p>
-          <Segmentado etiqueta="Posición" opciones={POSICIONES} valor={posicion}
-            onCambio={(p) => { despachar({ tipo: "posicion", posicion: p }); }} />
-          {giro !== null && posicion !== null && (
+        <TuMano
+          titulo={trasMus ? "Tu mano después del mus" : "Tu mano"}
+          cartas={rangos(mano)}
+          jugada={completa
+            ? describirMano(mano)
+            : [cartas.length === 0 ? "El 3 es rey y el 2 es as." : "Toca una carta para quitarla."]}
+          contexto={contexto}
+          posicion={posicion}
+          onQuitar={(rango) => { despachar({ tipo: "quitar", rango }); }}
+          onPosicion={(p) => { despachar({ tipo: "posicion", posicion: p }); }}
+          aviso={giro !== null && posicion !== null && (
             <p className="aviso aviso--giro" role="status">
               {giro.veces > 1 ? `Ojo: has pulsado «Nueva mano» ${String(giro.veces)} veces seguidas: ` : "Nueva mano: "}
               ahora eres <strong>{nombrePosicion.toLowerCase()}</strong> (antes, {nombre(giro.desde).toLowerCase()}).
               Si no es así, toca tu posición.
             </p>
           )}
-          <Segmentado etiqueta="¿Ha habido mus?" pequeno valor={huboMus ? "si" : "no"}
-            opciones={[{ valor: "no", texto: "No" }, { valor: "si", texto: "Sí" }]}
-            onCambio={(v) => { cambiarMus(v === "si"); }} />
-        </section>
+        />
 
-        {manifiesto !== null && (
-          <Senas senas={manifiesto.senas} marcadas={senas} desactivadas={huboMus}
-            onCambio={(ids) => { despachar({ tipo: "senas", ids }); }}
-            aviso={avisoSenas} />
-        )}
-
-        {resultados}
+        <div className="panel" role="tabpanel" id={ID_PANEL} aria-labelledby={idPestana(pestana)}>
+          {panel}
+        </div>
 
         <Limitaciones manifiesto={manifiesto} />
       </main>
 
-      {completa ? (
-        <div className="barra-inferior">
-          {!huboMus && (
-            <button type="button" className="boton boton--secundario" onClick={() => { cambiarMus(true); }}>
-              Ha habido mus
-            </button>
-          )}
-          <button type="button" className="boton" onClick={nuevaMano}>Nueva mano</button>
-        </div>
-      ) : (
-        <Teclado cuantas={cartas.length}
-          titulo={`${huboMus ? "Cartas después del mus" : "Tus cartas"} · ${posicion === null ? "elige tu posición arriba" : `eres ${nombrePosicion.toLowerCase()}`}`}
-          onCarta={(rango) => { despachar({ tipo: "poner", rango }); }}
-          onBorrar={() => { despachar({ tipo: "borrar" }); }} onNueva={nuevaMano} />
-      )}
+      <div className="pie">
+        {completa ? (
+          <div className="pie__acciones">
+            <button type="button" className="boton" onClick={nuevaMano}>Nueva mano</button>
+          </div>
+        ) : (
+          <Teclado cuantas={cartas.length}
+            titulo={`${trasMus ? "Cartas después del mus" : "Tus cartas"} · ${posicion === null ? "elige tu posición arriba" : `eres ${nombrePosicion.toLowerCase()}`}`}
+            onCarta={(rango) => { despachar({ tipo: "poner", rango }); }}
+            onBorrar={() => { despachar({ tipo: "borrar" }); }} onNueva={nuevaMano} />
+        )}
+        <Pestanas valor={pestana} onCambio={cambiarPestana} />
+      </div>
     </div>
   );
-}
-
-function nombresSenas(manifiesto: Manifiesto, ids: readonly string[]): string {
-  return manifiesto.senas.filter((s) => ids.includes(s.id)).map((s) => s.nombre.toLowerCase()).join(" y ");
 }
 
 /**

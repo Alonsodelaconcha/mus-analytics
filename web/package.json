@@ -16,7 +16,8 @@
     "tipos": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run",
-    "verificar": "npm run tipos && npm run lint && npm test"
+    "verificar": "npm run tipos && npm run lint && npm test",
+    "capturas": "node scripts/capturas.mjs"
   },
   "dependencies": {
     "react": "^19.3.0",

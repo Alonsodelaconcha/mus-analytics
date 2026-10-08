@@ -46,4 +46,10 @@ export default defineConfig(
     files: ["test/**/*.ts", "vite.config.ts", "eslint.config.js"],
     languageOptions: { globals: globals.node },
   },
+  {
+    // Herramientas en JavaScript (capturas): solo las reglas que no necesitan tipos.
+    files: ["scripts/**/*.mjs"],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: { globals: globals.node },
+  },
 );

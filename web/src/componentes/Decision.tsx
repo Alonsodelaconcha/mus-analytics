@@ -37,13 +37,10 @@ export function Decision({
   vista,
   posicion,
   selectorMesa,
-  senasIgnoradas,
 }: {
   vista: VistaDecision;
   posicion: string;
   selectorMesa: ReactNode;
-  /** Hay señas marcadas, pero la recomendación no las usa (MVP). */
-  senasIgnoradas: boolean;
 }) {
   return (
     <section className="bloque decision" data-veredicto={vista.veredicto} aria-labelledby="titulo-decision">
@@ -56,11 +53,8 @@ export function Decision({
       </p>
       <p className="decision__explicacion">{vista.explicacion}</p>
       {vista.matiz !== "" && <p className="decision__matiz">{vista.matiz}</p>}
-      {senasIgnoradas && (
-        <p className="aviso decision__senas" role="note">
-          Ojo: este consejo no cuenta las señas de tu compañero.
-        </p>
-      )}
+      {/* Fijo: el compañero hace las señas antes de que decidas, y en el MVP no cuentan aquí. */}
+      <p className="nota decision__senas">No tiene en cuenta las señas de tu compañero.</p>
       {selectorMesa}
       <Desplegable titulo="Más detalle" clase="desplegable--discreto">
         <ul className="detalle">

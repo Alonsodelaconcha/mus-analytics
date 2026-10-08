@@ -647,3 +647,52 @@ Cada uno necesita cosas distintas, y hoy todo va en una sola columna larga. Dos 
 2. **El usuario juega en todas las partidas**, así que su forma de jugar pesa en los datos. Según él, no es ni muy agresiva ni muy conservadora, y varía según la partida. Para poder separar sus decisiones de las de los demás, el fichero tiene dos columnas nuevas: `mi_posicion` y `usa_web`. Están vacías en las 15 partidas anotadas hasta ahora; el usuario las rellenará desde ahora. `manos-reales` cuenta cuántas manos las tienen.
 
 **Dato para la Fase 6: rondas siguientes** (sin cambiar el modelo, que es de una sola ronda de mus). De las 24 manos con mus en la primera ronda, se sabe cómo siguieron 23 (en una solo se anotó "mus"). En **8 de 23 hubo otra ronda de mus: 35 % (IC 95 %: 19-55 %)**, como contó el usuario. Rondas de mus antes del corte: 1 en 15 manos, 2 en 7 y 3 en 1. La frecuencia se parece a la de la primera ronda (34 %), pero con 23 manos no se puede saber si tras el mus se corta más o menos que con las cartas del reparto.
+
+## 2026-10-08 · Fase 4, paso 3: estructura A (una pestaña por momento de la mano)
+
+El usuario eligió la estructura A (`docs/plan_fase4.md`, con sus decisiones al final) y aprobó los cambios anteriores: el aviso de las señas, el giro de la posición y el matiz de las decisiones ajustadas. Sobre la cifra de A A 4 5 de postre: −0,56 en la web frente a −0,51 en la línea de órdenes es ruido de la simulación (explicado en la entrada anterior); no se toca.
+
+**Pantalla:**
+- **Arriba, la mano compacta:** las cuatro cartas, más pequeñas (se siguen quitando tocándolas); a su lado, la jugada en dos líneas («Sin pares» / «29 al punto») y de qué cartas se trata («Mesa: normal», «Cartas del reparto», «Cartas tras el mus»); debajo, la posición.
+- **Abajo, fijo para el pulgar:** las tres pestañas y, encima, el teclado mientras faltan cartas o «Nueva mano» con la mano completa. Antes de seguir se comprobó que caben bien a 390 px: título y subtítulo en una línea cada uno (captura `1-mus-o-corto`).
+- **«¿Mus o corto?»:** la recomendación y el descarte. Una línea fija, «No tiene en cuenta las señas de tu compañero», sustituye al aviso que solo salía con señas marcadas (aquí ya no se pueden marcar).
+- **«Se ha cortado»:** las señas en una rejilla de tres columnas, con el enlace a la chuleta en la fila del título, y debajo la fila de los cinco lances: el porcentaje de la pareja y la frecuencia corta («9 de 10», «1 de 14», «casi nunca»; mismos cortes que la frase larga). Al tocar un lance: la frase completa, «Tú solo: x %» y la nota del lance; otro toque lo cierra. Si el punto no se juega (tienes juego), la celda dice «—» y «no se juega».
+- **«Ha habido mus»:** las cartas nuevas y la lista de probabilidades tras el mus, como antes, sin señas.
+- **Accesibilidad:** las pestañas siguen el patrón ARIA de pestañas (`tablist`, `tab`, `tabpanel`, y las flechas del teclado cambian de pestaña).
+
+**Estado de la mano (`mano.ts`).** La pestaña abierta pasa al *reducer*, con dos manos separadas: la del reparto (con sus señas) y la de después del mus. Así las reglas del usuario salen solas y se prueban sin pintar nada:
+- completar las cartas no toca la pestaña;
+- «Se ha cortado» y «¿Mus o corto?» comparten la mano del reparto;
+- «Ha habido mus» empieza siempre vacía y no usa las señas;
+- volver de «Ha habido mus» enseña otra vez la mano del reparto, que no se había borrado;
+- la posición solo cambia con «Nueva mano» o tocándola.
+
+**Una decisión a confirmar con el usuario: la mano repartida se restaura con sus señas.** Pidió que «Ha habido mus» borre las señas y que, al volver por un toque equivocado, se restaure la mano repartida. Si se restauraran las cartas pero no las señas, «Se ha cortado» enseñaría probabilidades sin las señas que había marcado, y el único indicio sería la nota «sin señas de tu compañero»: un error fácil de no ver. Por eso las señas se guardan con la mano repartida. En «Ha habido mus» no se ven ni se usan, y «Nueva mano» las borra de verdad. Al volver a entrar en «Ha habido mus», sus cartas empiezan otra vez vacías, como pidió el usuario.
+
+**Que quepa en 390 × 844.** Con las pestañas abajo, el pie fijo mide unos 140 px (en la maqueta, unos 70 más 70 de las pestañas bajo la mano: el total es el mismo). En la primera versión, la fila de lances de «Se ha cortado» quedaba tapada por el pie. Se ganó el sitio así:
+- la jugada en dos líneas fijas;
+- cartas un poco más pequeñas y cabecera más baja;
+- el enlace a la chuleta en la fila del título;
+- la nota de la fila en una línea («Exacto, con las señas marcadas»: las señas se ven justo encima);
+- bloques algo menos acolchados;
+- **botones de seña de 44 px de alto** en vez de 47: es el mínimo recomendado para el dedo, y son anchos (un tercio de la pantalla). Es la única excepción a la regla de 47 px.
+
+Al tocar un lance, la página se desplaza lo justo para que su frase no quede bajo el pie (`scrollIntoView` con un `scroll-margin-bottom` igual al alto del pie). Al cambiar de pestaña o con «Nueva mano», vuelve arriba.
+
+**Tests** (149 en la web; 17 nuevos):
+- *Reducer:* «Nueva mano» abre «¿Mus o corto?» desde las tres pestañas; completar las cartas no cambia de pestaña en ninguna; «Se ha cortado» conserva cartas y señas; «Ha habido mus» empieza vacía (también al volver a entrar); volver restaura la mano repartida con sus señas, hacia «¿Mus o corto?» y hacia «Se ha cortado»; la posición no cambia al cambiar de pestaña.
+- *Flujo completo (jsdom):* lo mismo con clics; la fila de lances y su detalle; la línea fija; las flechas del teclado.
+- *Los tests detectan los errores que deben:* con dos fallos introducidos a propósito en el *reducer* (no restaurar la mano; volver a «¿Mus o corto?» al completar las cartas) fallan 4 tests en cada caso, del *reducer* y del flujo.
+
+**Script de capturas** (`web/scripts/capturas.mjs`, `npm run capturas`). Es el de la sesión anterior, guardado y mejorado; sin dependencias (Node trae `WebSocket` y `fetch`):
+- escenas por defecto para las tres pestañas, el detalle de un lance y el teclado, con las manos de las maquetas;
+- `--url` (localhost o la IP de red), `--tema claro|oscuro|ambos` y `--escenas` (un JSON con escenas propias);
+- comprueba que no hay errores en la consola (salvo el `favicon.ico` que pide el navegador; la web tendrá icono en el paso 4) y dice si el contexto es seguro y si existe `crypto.subtle`. Sale con código 1 si algo falla.
+
+*Error encontrado en el script antiguo:* mataba solo el proceso principal de Edge, y sus procesos hijos seguían vivos con el perfil temporal abierto. Había **56 procesos de Edge sin ventana** acumulados de las sesiones anteriores, y sus perfiles no se podían borrar. Se cerraron. Ahora el script cierra Edge de forma ordenada (`Browser.close` por el protocolo de depuración) y usa siempre la misma carpeta de perfil. Comprobado: tras ejecutarlo no queda ningún proceso.
+
+**Comprobación:**
+- `npm run verificar`: tipos, lint y 149 tests.
+- Por localhost (servidor de desarrollo y versión construida) y por la IP de red (http://192.168.1.37:4173, versión construida): en las cinco escenas, sin errores en la consola. Por la IP de red, sin contexto seguro ni `crypto.subtle`, como debe ser.
+- En un navegador real, el toque equivocado: reparto con seña → «Ha habido mus» (mano vacía) → dos cartas → «Se ha cortado» restaura R C 5 4, la seña y la posición.
+- Capturas a 390 × 844, en claro y en oscuro, en `resultados/capturas` (no se versionan).

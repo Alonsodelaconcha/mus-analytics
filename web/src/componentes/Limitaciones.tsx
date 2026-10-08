@@ -17,7 +17,7 @@ export function Limitaciones({ manifiesto }: { manifiesto: Manifiesto | null }) 
             ronda.
           </li>
           <li>
-            <strong>Las señas solo cuentan si no ha habido mus.</strong> Si ha habido mus, las
+            <strong>Las señas solo cuentan en «Se ha cortado».</strong> En «Ha habido mus», las
             probabilidades son sin información de tu compañero.
           </li>
           <li>
@@ -35,9 +35,9 @@ export function Limitaciones({ manifiesto }: { manifiesto: Manifiesto | null }) 
             mesa: elige el tipo que más se parezca.
           </li>
           <li>
-            <strong>Exactas y simuladas.</strong> Las probabilidades sin mus son exactas. «¿Mus o
-            corto?», los descartes y las cifras tras el mus salen de simular cientos de miles de
-            manos, con un margen de error pequeño (se ve en «Más detalle»).
+            <strong>Exactas y simuladas.</strong> Las probabilidades de «Se ha cortado» son exactas.
+            «¿Mus o corto?», los descartes y las cifras de «Ha habido mus» salen de simular cientos
+            de miles de manos, con un margen de error pequeño (se ve en «Más detalle»).
           </li>
         </ul>
         {manifiesto !== null && (
