@@ -51,11 +51,16 @@ export interface VistaDecision {
   readonly etiqueta: string;
   /** Una frase con cuánto se gana. */
   readonly explicacion: string;
+  /** En las decisiones ajustadas, que con envites podría cambiar ("" si es clara). */
+  readonly matiz: string;
   readonly ventaja: number;
   readonly radio: number;
   readonly pMusDespues: number;
   readonly repartos: number;
 }
+
+/** Las cifras son en paso: en las decisiones ajustadas, los envites pueden darles la vuelta. */
+export const MATIZ_AJUSTADA = "Con envites o según el marcador, podría cambiar.";
 
 export function vistaDecision(d: DecisionMus): VistaDecision {
   const v = d.ventaja;
@@ -68,6 +73,7 @@ export function vistaDecision(d: DecisionMus): VistaDecision {
       intensidad: "igual",
       titulo: "Da igual",
       etiqueta: "",
+      matiz: MATIZ_AJUSTADA,
       explicacion: `Cortar y dar mus valen prácticamente lo mismo: la diferencia es de ${tantosPorMano(v)}.${siAcaso}`,
     };
   }
@@ -79,6 +85,7 @@ export function vistaDecision(d: DecisionMus): VistaDecision {
     intensidad,
     titulo: mus ? "Da mus" : "Corta",
     etiqueta: intensidad === "clara" ? "Claro" : "Por poco",
+    matiz: intensidad === "clara" ? "" : MATIZ_AJUSTADA,
     explicacion: `${mus ? "Si das mus" : "Si cortas"}, tu pareja saca de media ${tantosPorMano(v, true)} que ${mus ? "si cortas" : "si das mus"}.`,
   };
 }

@@ -42,6 +42,20 @@ describe("¿mus o corto?", () => {
     expect(vistaDecision(decision(0.05, 0.08)).veredicto).toBe("igual");
   });
 
+  it("en las ajustadas (por poco o da igual) avisa de que con envites podría cambiar", () => {
+    expect(vistaDecision(decision(-0.4)).matiz).toBe("");
+    expect(vistaDecision(decision(-0.1)).matiz).toBe("Con envites o según el marcador, podría cambiar.");
+    expect(vistaDecision(decision(0.01, 0.02)).matiz).toBe("Con envites o según el marcador, podría cambiar.");
+  });
+
+  it("A A 4 5 de postre en una mesa normal: corta (el ejemplo de las limitaciones)", async () => {
+    const d = decisionDe(await datos.mesa("normal"), escalas, indiceMano(leerMano("A A 4 5")), 4);
+    // Sin señas, «Corta» claro: python -m mus cortar da ≈ −0,52 (tres semillas de 300 000
+    // repartos) y la web, −0,56 ± 0,04 con 100 000. Con el compañero ciego, +0,42: da mus.
+    expect(d?.decision).toBe("cortar");
+    expect(d && vistaDecision(d).intensidad).toBe("clara");
+  });
+
   it("la explicación dice cuánto se gana, en tantos cada 10 manos", () => {
     expect(vistaDecision(decision(-0.27)).explicacion)
       .toBe("Si cortas, tu pareja saca de media unos 3 tantos más cada 10 manos que si das mus.");

@@ -73,6 +73,46 @@ describe("la calculadora", () => {
     expect(screen.getByText("Corrige las señas para ver las probabilidades de ganar.")).toBeDefined();
   });
 
+  it("con señas marcadas, la recomendación avisa de que no las cuenta", async () => {
+    const usuario = await empezar();
+    await meterCartas(usuario, ["as", "as", "cuatro", "cinco"]);
+    await usuario.click(screen.getByRole("button", { name: "Postre" }));
+    const decision = await screen.findByRole("region", { name: /¿Mus o corto\?/ });
+    expect(within(decision).queryByText(/no cuenta las señas/)).toBeNull();
+    await usuario.click(screen.getByRole("button", { name: /¿Qué te ha dicho tu compañero\?/ }));
+    await usuario.click(screen.getByRole("button", { name: "Ciego" }));
+    expect(within(decision).getByText("Ojo: este consejo no cuenta las señas de tu compañero.")).toBeDefined();
+    expect(within(decision).getByText("Corta")).toBeDefined(); // la recomendación no cambia
+  });
+
+  it("«Nueva mano» gira la posición, lo anuncia y se corrige con un toque", async () => {
+    const usuario = await empezar();
+    await usuario.click(screen.getByRole("button", { name: "Mano" }));
+    expect(screen.getByText("Tus cartas · eres mano")).toBeDefined();
+    await usuario.click(screen.getByRole("button", { name: "Nueva mano" }));
+    expect(screen.getByRole("status").textContent).toMatch(/Nueva mano: ahora eres postre \(antes, mano\)/);
+    expect(screen.getByRole("button", { name: "Postre" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Tus cartas · eres postre")).toBeDefined();
+    // Pulsada otra vez por error: lo dice.
+    await usuario.click(screen.getByRole("button", { name: "Nueva mano" }));
+    expect(screen.getByRole("status").textContent).toMatch(/2 veces seguidas: ahora eres tercero \(antes, mano\)/);
+    // Un toque en la posición buena lo corrige y retira el aviso.
+    await usuario.click(screen.getByRole("button", { name: "Postre" }));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByText("Tus cartas · eres postre")).toBeDefined();
+  });
+
+  it("cambiar «¿Ha habido mus?» o borrar cartas no gira la posición", async () => {
+    const usuario = await empezar();
+    await usuario.click(screen.getByRole("button", { name: "Segundo" }));
+    await meterCartas(usuario, ["rey", "sota"]);
+    await usuario.click(screen.getByRole("button", { name: "⌫ Borrar" }));
+    await usuario.click(screen.getByRole("button", { name: "Sí" }));
+    await usuario.click(screen.getByRole("button", { name: "No" }));
+    expect(screen.getByRole("button", { name: "Segundo" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("la chuleta de señas se abre y se cierra", async () => {
     const usuario = await empezar();
     await usuario.click(screen.getByRole("button", { name: /¿Qué te ha dicho tu compañero\?/ }));

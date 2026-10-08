@@ -26,7 +26,9 @@ export function Limitaciones({ manifiesto }: { manifiesto: Manifiesto | null }) 
           </li>
           <li>
             <strong>«¿Mus o corto?» no usa las señas</strong> ni lo que hables con tu compañero:
-            cada uno decide con sus cartas.
+            cada uno decide con sus cartas. Y pueden cambiar la decisión: con A A 4 5 de postre en
+            una mesa normal, la web dice «Corta», pero si tu compañero te ha hecho ciego conviene dar
+            mus (unos 4 tantos más cada 10 manos).
           </li>
           <li>
             <strong>Tipo de mesa.</strong> Las decisiones dudosas dependen de cuánto se corte en tu

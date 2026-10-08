@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useReducer, useState } from "react";
 
 import { Carta } from "./componentes/Carta";
 import { Decision, SelectorMesa } from "./componentes/Decision";
@@ -9,6 +9,7 @@ import { Segmentado } from "./componentes/Segmentado";
 import { Senas } from "./componentes/Senas";
 import { Teclado } from "./componentes/Teclado";
 import { type Recurso, usePreferencia, usePromesa } from "./estado";
+import { ESTADO_INICIAL, reducirMano } from "./mano";
 import { desdeRangos, rangos } from "./nucleo/cartas";
 import {
   type Cargador,
@@ -48,10 +49,9 @@ export function App({ cargador }: { cargador: Cargador }) {
   const [promesaDatos, setPromesaDatos] = useState(() => Datos.cargar(cargador));
   const datos = usePromesa(promesaDatos);
 
-  const [cartas, setCartas] = useState<number[]>([]);
-  const [posicion, setPosicion] = useState<number | null>(null);
-  const [huboMus, setHuboMus] = useState(false);
-  const [senas, setSenas] = useState<string[]>([]);
+  // Todas las reglas de la mano (también el giro de la posición) están en mano.ts.
+  const [estado, despachar] = useReducer(reducirMano, ESTADO_INICIAL);
+  const { cartas, posicion, huboMus, senas, giro } = estado;
   const [mesaGuardada, setMesa] = usePreferencia("mus-analytics.mesa", "normal", esTexto);
 
   const d = datos.estado === "listo" ? datos.valor : null;
@@ -89,30 +89,12 @@ export function App({ cargador }: { cargador: Cargador }) {
     avisoSenas = "Con tus cartas, tu compañero no puede tener eso: revisa las señas.";
   }
 
-  // Actualizaciones funcionales: dos toques muy seguidos no pueden pisarse.
-  const ponerCarta = (rango: number): void => {
-    setCartas((c) => (c.length < 4 ? [...c, rango] : c));
-  };
-  const quitarCarta = (rango: number): void => {
-    setCartas((c) => {
-      const i = c.lastIndexOf(rango);
-      return i < 0 ? c : [...c.slice(0, i), ...c.slice(i + 1)];
-    });
-  };
-  const nuevaMano = (): void => {
-    setCartas([]);
-    setSenas([]);
-    setHuboMus(false);
-  };
-  // Tras el mus la mano siempre es otra (hay que tirar al menos una carta): se vacía.
-  const cambiarMus = (si: boolean): void => {
-    if (si === huboMus) return;
-    setHuboMus(si);
-    setCartas([]);
-    if (si) setSenas([]);
-  };
+  // Con un reducer, dos toques muy seguidos no pueden pisarse.
+  const nuevaMano = (): void => { despachar({ tipo: "nueva-mano" }); };
+  const cambiarMus = (si: boolean): void => { despachar({ tipo: "mus", si }); };
 
-  const nombrePosicion = POSICIONES.find((p) => p.valor === posicion)?.texto ?? "";
+  const nombre = (p: number | null): string => POSICIONES.find((x) => x.valor === p)?.texto ?? "";
+  const nombrePosicion = nombre(posicion);
   const selectorMesa = manifiesto !== null && (
     <SelectorMesa mesas={manifiesto.mesas} valor={mesaId} onCambio={setMesa} />
   );
@@ -145,7 +127,8 @@ export function App({ cargador }: { cargador: Cargador }) {
             const decision = decisionDe(m, manifiesto.escalas, indice, posicion);
             return decision === null
               ? <p className="pista">No hay recomendación para esta mano.</p>
-              : <Decision vista={vistaDecision(decision)} posicion={nombrePosicion} selectorMesa={selectorMesa} />;
+              : <Decision vista={vistaDecision(decision)} posicion={nombrePosicion} selectorMesa={selectorMesa}
+                  senasIgnoradas={senas.length > 0} />;
           }}
         </ConMesa>
         <ConMesa mesa={mesa} que="los descartes" plural>
@@ -214,7 +197,8 @@ export function App({ cargador }: { cargador: Cargador }) {
               return r === undefined ? (
                 <Carta key={i} rango={null} />
               ) : (
-                <button key={i} type="button" className="mano__hueco" onClick={() => { quitarCarta(r); }}
+                <button key={i} type="button" className="mano__hueco"
+                  onClick={() => { despachar({ tipo: "quitar", rango: r }); }}
                   aria-label={`Quitar carta ${String(i + 1)}`}>
                   <Carta rango={r} />
                 </button>
@@ -224,14 +208,23 @@ export function App({ cargador }: { cargador: Cargador }) {
           <p className="mano__jugada" aria-live="polite">
             {completa ? `${describirPares(mano)} · ${describirJuego(mano)}` : "El 3 cuenta como rey y el 2 como as. Toca una carta para quitarla."}
           </p>
-          <Segmentado etiqueta="Posición" opciones={POSICIONES} valor={posicion} onCambio={setPosicion} />
+          <Segmentado etiqueta="Posición" opciones={POSICIONES} valor={posicion}
+            onCambio={(p) => { despachar({ tipo: "posicion", posicion: p }); }} />
+          {giro !== null && posicion !== null && (
+            <p className="aviso aviso--giro" role="status">
+              {giro.veces > 1 ? `Ojo: has pulsado «Nueva mano» ${String(giro.veces)} veces seguidas: ` : "Nueva mano: "}
+              ahora eres <strong>{nombrePosicion.toLowerCase()}</strong> (antes, {nombre(giro.desde).toLowerCase()}).
+              Si no es así, toca tu posición.
+            </p>
+          )}
           <Segmentado etiqueta="¿Ha habido mus?" pequeno valor={huboMus ? "si" : "no"}
             opciones={[{ valor: "no", texto: "No" }, { valor: "si", texto: "Sí" }]}
             onCambio={(v) => { cambiarMus(v === "si"); }} />
         </section>
 
         {manifiesto !== null && (
-          <Senas senas={manifiesto.senas} marcadas={senas} onCambio={setSenas} desactivadas={huboMus}
+          <Senas senas={manifiesto.senas} marcadas={senas} desactivadas={huboMus}
+            onCambio={(ids) => { despachar({ tipo: "senas", ids }); }}
             aviso={avisoSenas} />
         )}
 
@@ -250,9 +243,10 @@ export function App({ cargador }: { cargador: Cargador }) {
           <button type="button" className="boton" onClick={nuevaMano}>Nueva mano</button>
         </div>
       ) : (
-        <Teclado cuantas={cartas.length} titulo={huboMus ? "Cartas después del mus" : "Tus cartas"}
-          onCarta={ponerCarta} onBorrar={() => { setCartas((c) => c.slice(0, -1)); }}
-          onNueva={nuevaMano} />
+        <Teclado cuantas={cartas.length}
+          titulo={`${huboMus ? "Cartas después del mus" : "Tus cartas"} · ${posicion === null ? "elige tu posición arriba" : `eres ${nombrePosicion.toLowerCase()}`}`}
+          onCarta={(rango) => { despachar({ tipo: "poner", rango }); }}
+          onBorrar={() => { despachar({ tipo: "borrar" }); }} onNueva={nuevaMano} />
       )}
     </div>
   );

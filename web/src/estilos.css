@@ -566,6 +566,21 @@ h1, h2, h3 {
   margin: 0 0 0.4rem;
 }
 
+.decision__matiz {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  color: var(--suave);
+}
+
+.decision__senas {
+  margin: 0.2rem 0 0.6rem;
+  font-weight: 600;
+}
+
+.aviso--giro {
+  margin: 0.5rem 0 0;
+}
+
 .selector-mesa {
   margin: 0.4rem 0 0.2rem;
 }

@@ -541,3 +541,62 @@ Para que no vuelva a pasar, una regla de ESLint prohíbe en `src` usar directame
 **De paso:**
 - Concordancia de los mensajes de error: "No se ha podido cargar la recomendación", "No se han podido cargar los descartes". Hay un test.
 - Los errores de red, que cada navegador da en inglés ("Failed to fetch", "Load failed"), ahora dicen "no hay conexión con el servidor de la web".
+
+## 2026-10-08 · Fase 4, paso 3: comentarios del usuario tras probarla en el móvil
+
+El usuario probó en su móvil, y le funcionaron bien:
+- R R C S de mano: «Corta, claro».
+- R C 5 4 de mano en mesa Normal: «Da mus», quedándose R C.
+- A A 4 5 de postre, con y sin señas.
+- Una mano tras el mus, los toques rápidos, el uso con una mano, la chuleta y el modo oscuro.
+
+Pidió cuatro cambios.
+
+**1. Las señas no cambian «¿mus o corto?» en el MVP, pero lo parecía.** El bloque de señas está encima del veredicto. El caso que señaló, comprobado con la línea de órdenes (mesa Normal):
+
+| A A 4 5 de postre | Dar mus − cortar | Decisión |
+|---|---|---|
+| Sin información (`mus cortar "A A 4 5" --posicion 4`) | −0,51 [−0,53, −0,49] | Cortar |
+| Compañero ciego (`--companero "sin_pares, sin_juego"`) | **+0,42** [+0,39, +0,46] | **Dar mus** |
+
+La seña sí cambia la decisión, así que:
+- con señas marcadas, el bloque de la recomendación dice «Ojo: este consejo no cuenta las señas de tu compañero»;
+- el caso figura como ejemplo en las limitaciones.
+
+*Una diferencia que no es un error.* Para el mismo caso sin información, la web enseña −0,56 ± 0,04 y la línea de órdenes, −0,51 ± 0,02. Con la semilla de la exportación, la línea de órdenes reproduce exactamente −0,5599, así que no hay diferencia sistemática. Con otras tres semillas sale −0,52. La simulación exportada cayó a casi dos desviaciones típicas del valor real, algo que pasa una de cada veinte veces, y su intervalo lo contiene. Por eso el texto de las limitaciones no da una cifra para el caso sin señas, y el test comprueba la decisión («Corta», clara) en vez de una cifra con un margen demasiado justo.
+
+**2. Estructura y desplazamiento:** propuesta pendiente del visto bueno del usuario (al final de esta entrada). Lo que se comprobó: con «Ha habido mus = Sí» ya no aparecen «¿Mus o corto?» ni «¿Qué tiro?», solo «Tras el mus». Pero el bloque de señas, aunque desactivado, empuja las probabilidades por debajo del borde de la pantalla.
+
+**3. La posición gira con «Nueva mano».** En la mesa del usuario la mano pasa al de la derecha: mano → postre, segundo → mano, tercero → segundo, postre → tercero.
+- **El estado de la mano es ahora un *reducer*** (`web/src/mano.ts`): una función pura con todas las transiciones, probada sin React.
+- **Solo gira «Nueva mano».** Las cartas, «¿Ha habido mus?» y las señas no cambian la posición.
+- **El giro se anuncia** («Nueva mano: ahora eres postre (antes, mano). Si no es así, toca tu posición.»). El título del teclado dice «Tus cartas · eres postre», donde está el pulgar. Tocar la posición lo corrige y retira el aviso.
+- **Si se pulsa «Nueva mano» varias veces seguidas** sin completar una mano, el aviso lo dice («Ojo: has pulsado «Nueva mano» 2 veces seguidas…»). Es justo el error que preocupaba: que la posición quede mal sin avisar.
+- **Sin posición elegida no gira.** En la primera mano de cada partida basta con elegirla a mano.
+- **Tests:** cuatro «Nueva mano» seguidas vuelven a la posición inicial (en las cuatro posiciones); los demás controles no la giran; el aviso aparece, cuenta las pulsaciones seguidas y desaparece al corregir.
+
+**4. Umbrales:** se quedan en 0,03 y 0,15. En «Por poco» y «Da igual» se añade «Con envites o según el marcador, podría cambiar».
+
+**Comprobación.**
+- `npm run verificar`: 132 tests.
+- Navegador, por localhost y por la IP de red.
+- Las capturas a 390 × 844 se hicieron con Edge sin ventana, manejado por su protocolo de depuración desde un script de Node sin dependencias (en el directorio temporal de la sesión), con los mismos pasos para la versión anterior y la nueva. El navegador del panel daba capturas con mosaicos repetidos.
+- Por la IP de red, el script comprueba además que no hay contexto seguro, que `crypto.subtle` no existe y que no aparece ningún error.
+- La IP del portátil cambió durante la sesión (de 172.20.10.2 a 192.168.1.37) al cambiar de red Wi-Fi: hay que usar siempre la que muestra `npm run movil-final`.
+
+**Propuesta de estructura (pendiente de que el usuario elija).** En la mesa hay tres momentos distintos:
+- decidir mus o corto;
+- alguien ha cortado y se juega con las cartas del reparto;
+- ha habido mus y se juega con cartas nuevas.
+
+Cada uno necesita cosas distintas, y hoy todo va en una sola columna larga. Dos opciones, con maquetas a 390 × 844:
+
+- **A. Una pestaña por momento.** Bajo la mano (más compacta, con la posición), un selector con «¿Mus o corto?», «Se ha cortado» y «Ha habido mus». Cada pestaña enseña solo lo suyo:
+  - la recomendación y el descarte;
+  - las señas y las probabilidades con señas;
+  - las cartas nuevas y las probabilidades tras el mus.
+
+  Las señas solo están donde cuentan, así que no pueden parecer parte de la recomendación. Sustituye a «¿Ha habido mus? Sí/No».
+- **B. Todo de un vistazo y el detalle en hojas.** Una tarjeta resume el veredicto, el mejor descarte y lo que se espera tener, y debajo hay una fila con las cinco probabilidades sin señas. La barra de abajo tiene «Han cortado», «Ha habido mus» y «Nueva mano»; «Han cortado» abre una hoja desde abajo con las señas y las probabilidades con señas.
+
+**Recomendación: A.** Coincide con cómo transcurre la mano, separa las señas de la recomendación por diseño y casi no obliga a desplazarse. B es más rápida de leer pero esconde más cosas tras un toque.
