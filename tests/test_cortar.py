@@ -166,6 +166,7 @@ class TestCLI:
         mesa = mesa_de(CORTA_CON_JUEGO, 30_000)
         monkeypatch.setattr(cli, "iterar_corte", lambda *a, **k: mesa)
         monkeypatch.setattr(cli, "mesa_rivales_razonables", lambda *a, **k: mesa)
+        monkeypatch.setattr(cli, "factor_corte_de_mesa", lambda mesa_id, reglas: 0.63)
 
     def test_cortar(self, capsys):
         assert main(["cortar", "R C 5 4", "--posicion", "1", "--n", "5000", "--semilla", "1"]) == 0
@@ -181,6 +182,16 @@ class TestCLI:
         assert main(["testigos", "--n", "3000"]) == 0
         salida = capsys.readouterr().out
         assert "A A 4 5 de postre, preguntando al compañero" in salida
+
+    def test_mesa_por_defecto_y_factor_a_mano(self, capsys):
+        import mus.__main__ as cli
+        args = cli.crear_parser().parse_args(["cortar", "R C 5 4"])
+        assert args.mesa == "normal" and cli._lambda(args) == (0.63, "mesa «Normal», λ = 0.63")
+        args = cli.crear_parser().parse_args(["cortar", "R C 5 4", "--factor-corte", "0.2",
+                                              "--mesa", "se-corta"])
+        assert cli._lambda(args)[0] == 0.2  # --factor-corte manda sobre --mesa
+        assert main(["corte-mesa", "--mesa", "mucho-mus"]) == 0
+        assert "Rivales razonables con mesa «Se da mucho mus»" in capsys.readouterr().out
 
     def test_factor_corte_invalido(self, monkeypatch):
         import mus.cortar as cortar

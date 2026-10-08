@@ -28,6 +28,8 @@ from mus.web import (
     exportar_datos_web,
     exportar_referencia,
     factor_corte,
+    factor_corte_de_mesa,
+    tipo_mesa,
 )
 
 MESA = mesa_de(CORTA_CON_JUEGO, 20_000)
@@ -62,6 +64,21 @@ def test_factor_corte():
     with pytest.raises(ValueError):
         factor_corte(normal, [(0.0, 1.0), (1.0, 0.5)])  # el modelo no llega a un 30 %
     assert [t.por_defecto for t in TIPOS_MESA].count(True) == 1
+
+
+def test_tipo_mesa():
+    assert tipo_mesa("normal").por_defecto and tipo_mesa("se-corta").p_hay_mus is None
+    assert factor_corte_de_mesa("se-corta") == 1.0  # no necesita la curva
+    with pytest.raises(ValueError, match="desconocido"):
+        tipo_mesa("sin-cortes")
+
+
+@pytest.mark.slow
+def test_lambda_de_la_cli_igual_que_el_de_los_datos_de_la_web():
+    """La línea de órdenes y la web deben usar el mismo λ en cada tipo de mesa."""
+    m = leer(RAIZ / "web" / "public" / "datos" / "manifiesto.json")
+    for mesa in m["mesas"]:
+        assert factor_corte_de_mesa(mesa["id"]) == mesa["factor_corte"]
 
 
 # --- Decisiones mano a mano ---------------------------------------------------------------

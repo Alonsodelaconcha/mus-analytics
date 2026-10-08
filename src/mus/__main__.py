@@ -107,12 +107,15 @@ from mus.web import (
     DIRECTORIO_REFERENCIA,
     N_DECISION,
     N_REFINADO,
+    TIPO_MESA_POR_DEFECTO,
     TIPOS_MESA,
     comprobar_manifiesto,
     consultar_datos,
     exportar_datos_web,
     exportar_referencia,
     factor_corte,
+    factor_corte_de_mesa,
+    tipo_mesa,
 )
 
 NOMBRE_POSICION = {1: "mano", 2: "segundo", 3: "tercero", 4: "postre"}
@@ -457,9 +460,18 @@ def cmd_tras_mus(args: argparse.Namespace) -> None:
         print(f"\nEquity tras el mus guardada en {exportar_equity_csv(mesa.tabla, args.csv)}")
 
 
+def _lambda(args: argparse.Namespace) -> tuple[float, str]:
+    """λ que piden los argumentos y su descripción: --factor-corte si se da; si no,
+    el del tipo de mesa (--mesa, por defecto el mismo que usa la web)."""
+    if args.factor_corte is not None:
+        return args.factor_corte, f"λ = {args.factor_corte:g} (--factor-corte)"
+    lam = factor_corte_de_mesa(args.mesa, _reglas(args))
+    return lam, f"mesa «{tipo_mesa(args.mesa).nombre}», λ = {lam:g}"
+
+
 def _mesa_con_corte(reglas: ReglasMus, escenario: str = "razonables", informar: bool = False,
                     simulaciones: int = SIMULACIONES_CORTE,
-                    factor_corte: float = 1.0) -> MesaConCorte:
+                    factor_corte: float = 1.0, descripcion: str = "") -> MesaConCorte:
     """Mesa con corte. ``escenario``: "razonables" (rivales de nivel 1, con su corte
     escalado por ``factor_corte``) o "equilibrio" (punto fijo corte ↔ descarte).
     La primera vez simula; después usa resultados/cache."""
@@ -467,7 +479,8 @@ def _mesa_con_corte(reglas: ReglasMus, escenario: str = "razonables", informar: 
         mesa = mesa_rivales_razonables(reglas, simulaciones=simulaciones,
                                        factor_corte=factor_corte)
         if not informar:
-            print(f"(Mesa: {mesa.escenario}; P(hay mus) = {mesa.p_hay_mus:.3f}.)")
+            extra = f"; {descripcion}" if descripcion else ""
+            print(f"(Mesa: {mesa.escenario}{extra}; P(hay mus) = {mesa.p_hay_mus:.3f}.)")
         return mesa
     mesa = iterar_corte(reglas, simulaciones=simulaciones,
                         informar=(lambda s: print(f"  {s}", flush=True)) if informar else None)
@@ -501,7 +514,8 @@ def _imprimir_decision(d: DecisionCorte, baraja) -> None:
 
 def cmd_cortar(args: argparse.Namespace) -> None:
     reglas = _reglas(args)
-    mesa = _mesa_con_corte(reglas, args.escenario, factor_corte=args.factor_corte)
+    lam, descripcion = _lambda(args)
+    mesa = _mesa_con_corte(reglas, args.escenario, factor_corte=lam, descripcion=descripcion)
     companero = parsear_condicion(args.companero, reglas) if args.companero else None
     posiciones = [args.posicion] if args.posicion else list(POSICIONES)
     print(f"Tantos netos en paso, IC 95 %. Escenario: {mesa.escenario}. Se simula la mano con "
@@ -517,7 +531,11 @@ def cmd_corte_mesa(args: argparse.Namespace) -> None:
     print(f"Cortar / dar mus y descarte (una ronda de mus, tantos en paso, sin señas). "
           f"Escenario: {args.escenario}.")
     inicio = time.perf_counter()
-    mesa = _mesa_con_corte(reglas, args.escenario, informar=True, simulaciones=args.n)
+    lam, descripcion = _lambda(args)
+    if args.escenario == "razonables":
+        print(f"Rivales razonables con {descripcion}.")
+    mesa = _mesa_con_corte(reglas, args.escenario, informar=True, simulaciones=args.n,
+                           factor_corte=lam)
     if args.escenario == "equilibrio":
         print(f"{'Equilibrio alcanzado' if mesa.convergio else 'NO ha convergido'} en "
               f"{len(mesa.historia)} vueltas ({time.perf_counter() - inicio:.0f} s).")
@@ -534,7 +552,8 @@ def cmd_corte_mesa(args: argparse.Namespace) -> None:
 
 def cmd_testigos(args: argparse.Namespace) -> None:
     reglas = _reglas(args)
-    mesas = {e: _mesa_con_corte(reglas, e, factor_corte=args.factor_corte)
+    lam, descripcion = _lambda(args)
+    mesas = {e: _mesa_con_corte(reglas, e, factor_corte=lam, descripcion=descripcion)
              for e in ("razonables", "equilibrio")}
     baraja = mesas["razonables"].tabla_inicial.tabla.baraja
     print(f"\nCasos testigo (docs/casos_testigo.md) frente al modelo; {args.n} repartos por caso, "
@@ -586,8 +605,8 @@ def cmd_calibrar(args: argparse.Namespace) -> None:
         print(f"Con {observacion.manos} manos el intervalo es demasiado ancho para decidir: "
               f"conviene llegar a {MANOS_RECOMENDADAS}-50. No se cambia nada.")
     else:
-        print(f"Para usarlo: --factor-corte {c.lambda_estimada:.2f} en 'cortar' y 'testigos'. "
-              "El valor por defecto (1) no cambia solo.")
+        print(f"Para usarlo: --factor-corte {c.lambda_estimada:.2f} en 'cortar', 'corte-mesa' y "
+              "'testigos'. Por defecto se usa el de la mesa «Normal» de la web; no cambia solo.")
     normal = next(t for t in TIPOS_MESA if t.por_defecto)
     lam_normal = factor_corte(normal, curva)
     desde, hasta = c.lambda_intervalo
@@ -716,6 +735,18 @@ def _verificar_tras_mus(mesa: MesaTrasMus, n: int, semilla: int | None) -> None:
               f"máximo {e.error_maximo:.4f} ({e.mano_error_maximo}), fuera del IC {e.fuera_del_intervalo}")
 
 
+def _argumentos_mesa(p: argparse.ArgumentParser) -> None:
+    """--mesa y --factor-corte: cuánto cortan los rivales razonables."""
+    descripciones = "; ".join(f"{t.id} = «{t.nombre}»" for t in TIPOS_MESA)
+    p.add_argument("--mesa", choices=[t.id for t in TIPOS_MESA], default=TIPO_MESA_POR_DEFECTO.id,
+                   help=f"Tipo de mesa, el mismo que en la web: {descripciones}. Por defecto, "
+                        f"{TIPO_MESA_POR_DEFECTO.id}.")
+    p.add_argument("--factor-corte", type=float, default=None,
+                   help="λ a mano (sustituye a --mesa): escala la probabilidad de corte de los "
+                        "rivales razonables; 0 = nadie corta (como en la 3b), 1 = rivales "
+                        "razonables (la mesa se-corta).")
+
+
 def crear_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mus", description="Motor de estadísticas del mus.",
@@ -811,6 +842,7 @@ def crear_parser() -> argparse.ArgumentParser:
                    help="Repartos simulados por vuelta.")
     p.add_argument("--csv", help="Exportar, por mano y posición, P(cortar), valor de cortar "
                                  "y ventaja de dar mus.")
+    _argumentos_mesa(p)
     p.set_defaults(func=cmd_corte_mesa)
 
     p = sub.add_parser("cortar", help="¿Cortar o dar mus con esta mano? (3c)",
@@ -824,16 +856,13 @@ def crear_parser() -> argparse.ArgumentParser:
     p.add_argument("--semilla", type=int, default=None)
     p.add_argument("--escenario", choices=("razonables", "equilibrio"), default="razonables",
                    help=ayuda_escenario)
-    ayuda_factor = ("Escala la probabilidad de corte de los rivales razonables: 0 = nadie "
-                    "corta (como en la 3b), 1 = rivales razonables (por defecto). Las "
-                    "decisiones dudosas dependen de cuánto se corta en la mesa.")
-    p.add_argument("--factor-corte", type=float, default=1.0, help=ayuda_factor)
+    _argumentos_mesa(p)
     p.set_defaults(func=cmd_cortar)
 
     p = sub.add_parser("testigos", help="Compara los casos testigo del usuario con el modelo.")
     p.add_argument("--n", type=int, default=300_000, help="Repartos simulados por caso.")
     p.add_argument("--semilla", type=int, default=1)
-    p.add_argument("--factor-corte", type=float, default=1.0, help=ayuda_factor)
+    _argumentos_mesa(p)
     p.set_defaults(func=cmd_testigos)
 
     p = sub.add_parser("calibrar", help="λ compatible con la frecuencia de mus observada en "

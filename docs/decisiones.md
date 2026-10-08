@@ -438,3 +438,12 @@ Además, cada fichero se verifica con su huella SHA-256 (Web Crypto). Esto detec
 Si alguien cambia el motor y no regenera, fallan.
 
 **Comprobado en un navegador real** con una página provisional (la interfaz es el paso 3): el manifiesto se valida, los ficheros se descargan con su huella correcta y no hay errores en la consola. El paquete pesa 228 KB (72 KB comprimido) con React incluido; los datos, 682 KB comprimidos.
+
+## 2026-10-08 · λ por defecto de la línea de órdenes = mesa "Normal"
+
+A petición del usuario, `cortar`, `corte-mesa` y `testigos` usan por defecto el λ de la mesa "Normal" de la web (0,63), para que la web y la línea de órdenes den siempre lo mismo.
+- El λ no se escribe a mano: `web.factor_corte_de_mesa` lo calcula igual que el exportador, invirtiendo la curva P(hay mus | λ). Si un día cambia la frecuencia de mus de "Normal" (por ejemplo, al recalibrar), cambian las dos a la vez.
+- Un test lento comprueba que coincide con el `factor_corte` de cada mesa en el manifiesto.
+- `--mesa mucho-mus | normal | se-corta` elige el tipo de mesa y `--factor-corte` sigue permitiendo un λ a mano.
+
+Las cifras de los casos testigo de la Fase 3c se calcularon con λ = 1. Para reproducirlas: `python -m mus testigos --mesa se-corta`.

@@ -39,6 +39,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import date
+from functools import lru_cache
 from math import comb
 from pathlib import Path
 
@@ -116,6 +117,34 @@ def factor_corte(tipo: TipoMesa, curva: Sequence[tuple[float, float]]) -> float:
     if not dentro:
         raise ValueError(f"El modelo no puede dar P(hay mus) = {tipo.p_hay_mus}")
     return round(lam, 2)
+
+
+def tipo_mesa(id_mesa: str) -> TipoMesa:
+    """Tipo de mesa por su id (``mucho-mus``, ``normal`` o ``se-corta``)."""
+    for tipo in TIPOS_MESA:
+        if tipo.id == id_mesa:
+            return tipo
+    raise ValueError(f"Tipo de mesa desconocido: {id_mesa!r}. Válidos: "
+                     f"{', '.join(t.id for t in TIPOS_MESA)}")
+
+
+TIPO_MESA_POR_DEFECTO = next(t for t in TIPOS_MESA if t.por_defecto)
+
+
+def factor_corte_de_mesa(id_mesa: str = TIPO_MESA_POR_DEFECTO.id,
+                         reglas: ReglasMus = REGLAS_POR_DEFECTO) -> float:
+    """λ de un tipo de mesa, calculado igual que al exportar los datos de la web.
+
+    Así la línea de órdenes y la web usan siempre el mismo λ. La curva
+    P(hay mus | λ) sale de resultados/cache (la primera vez se simula).
+    """
+    return _factor_corte_de_mesa(id_mesa, reglas)
+
+
+@lru_cache(maxsize=None)
+def _factor_corte_de_mesa(id_mesa: str, reglas: ReglasMus) -> float:
+    tipo = tipo_mesa(id_mesa)
+    return 1.0 if tipo.p_hay_mus is None else factor_corte(tipo, curva_hay_mus(reglas))
 
 
 # --- Decisiones de corte y descarte ----------------------------------------------------
