@@ -785,3 +785,23 @@ El problema: los móviles que ya tienen un *service worker* siguen usándolo aun
 - **Los tests detectan los errores que deben.** Con fallos puestos a propósito: sin comprobar la huella, sin borrar la caché a medias, sin desregistrarse en la emergencia, sin márgenes de zona segura, y recargando sin esperar al cambio de versión.
 
 **Error encontrado en la propia prueba.** Con un fallo puesto a propósito (la versión nueva tomaba el mando sin esperar), la primera versión de la prueba pasaba entera. Miraba la página en cuanto aparecía el aviso, y en ese instante todo estaba todavía en su sitio: la recarga llegaba después. Ahora espera tres segundos, vuelve a mirar y exige que haya una versión esperando. *Lección:* una prueba que comprueba que algo **no** pasa tiene que dar tiempo a que pase.
+
+### Publicada (2026-10-12)
+
+<https://alonsodelaconcha.github.io/mus-analytics/>
+
+**Orden seguido**, para que nada se viera antes de tiempo:
+1. Todo lo anterior, en local, y el historial reescrito.
+2. El usuario borró el repositorio de GitHub y lo creó de nuevo, privado y vacío. Se subió `main` y se comprobó en una copia recién clonada: una sola rama, todos los commits con la dirección `noreply` en autor y committer, el gmail en ningún campo ni mensaje, ninguna dirección de correo en los ficheros, y nada de `.claude/`, `resultados/` ni la copia de seguridad.
+3. Aviso al usuario («Ahora»): lo hizo público y eligió Pages → «GitHub Actions».
+4. El flujo de publicación, como último commit. Subirlo antes habría sido un riesgo: con un plan de pago, Pages publica también desde un repositorio privado.
+
+**Resultado:** «Publicar la web» tardó 53 segundos y «Tests del motor», 40; los dos en verde. GitHub reconoce la licencia (AGPL-3.0).
+
+**Comprobación de la web publicada** (`npm run comprobar-publicada`, 14 comprobaciones; sirve para después de cada publicación):
+- Lee la lista de `sw.js` y descarga los 31 ficheros: todos coinciden con su huella, y los 21 de datos son byte a byte los del repositorio.
+- Primera visita en un Edge limpio: contexto seguro, *service worker* registrado, una caché con los 31 ficheros, sin errores en la consola.
+- **Modo avión de verdad:** el mismo navegador se vuelve a abrir sin poder resolver ningún nombre (`--host-resolver-rules`). Ni otra web ni un fichero sin guardar responden, y la web abre y funciona entera.
+- La versión publicada (`d5d0e6c`) es la misma que sale al construir en Windows: la construcción da el mismo resultado en Windows y en Linux.
+
+**Pendiente:** las pruebas del usuario en su iPhone (instalación, modo avión y actualización con una 0.1.1). Es lo único que no se ha podido probar aquí: todo lo anterior es en Edge, y el iPhone usa Safari.

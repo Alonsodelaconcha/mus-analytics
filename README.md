@@ -172,6 +172,7 @@ npm run verificar
 
 Dos pruebas más usan Edge sin ventana, sin dependencias añadidas:
 - `npm run prueba-sin-conexion` comprueba el modo sin conexión en un navegador de verdad: uso sin red, una versión nueva cuya descarga falla a medias (se queda la anterior entera), la actualización y la salida de emergencia.
+- `npm run comprobar-publicada` comprueba la web ya publicada: que cada fichero coincide con su huella y que funciona con el navegador sin red.
 - `npm run capturas` saca capturas a tamaño de móvil y avisa si hay errores en la consola; con `--instalada` simula las zonas seguras del iPhone y falla si algún botón queda debajo.
 
 ## Tests

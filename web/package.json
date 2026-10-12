@@ -22,7 +22,8 @@
     "verificar": "npm run tipos && npm run lint && npm test",
     "capturas": "node scripts/capturas.mjs",
     "iconos": "node scripts/iconos.mjs",
-    "prueba-sin-conexion": "node scripts/prueba-sin-conexion.mjs"
+    "prueba-sin-conexion": "node scripts/prueba-sin-conexion.mjs",
+    "comprobar-publicada": "node scripts/comprobar-publicada.mjs"
   },
   "dependencies": {
     "react": "^19.3.0",

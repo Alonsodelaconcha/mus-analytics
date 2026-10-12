@@ -25,7 +25,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import http from "node:http";
 import { extname, join, resolve } from "node:path";
 
-import { AYUDAS, abrirEdge, espera } from "./edge.mjs";
+import { AYUDAS, ESTADO_PAGINA, MANO_ENTERA, abrirEdge, espera } from "./edge.mjs";
 
 const PUERTO = 4190;
 const RUTA = "/mus-analytics/";
@@ -136,20 +136,7 @@ function afirmar(condicion, mensaje, detalle = "") {
 /** Estado de la página; `null` mientras se está recargando. */
 async function mirar() {
   try {
-    return await edge.evaluar(`
-      const registros = await navigator.serviceWorker.getRegistrations();
-      const guardado = {};
-      for (const n of await caches.keys()) guardado[n] = (await (await caches.open(n)).keys()).length;
-      const texto = document.body?.innerText ?? "";
-      return {
-        texto,
-        version: /Versión (\\S+)/.exec(texto)?.[1] ?? null,
-        id: /Versión \\S+ \\(([0-9a-f]{7})\\)/.exec(texto)?.[1] ?? null,
-        controlada: navigator.serviceWorker.controller !== null,
-        registros: registros.length,
-        esperando: registros.some((r) => r.waiting !== null),
-        guardado,
-      };`);
+    return await edge.evaluar(ESTADO_PAGINA);
   } catch {
     return null;
   }
@@ -179,23 +166,7 @@ function afirmarGuardada(e, nombre) {
 
 /** Una mano entera en las tres pestañas y todos los ficheros de datos, uno por uno. */
 async function usarLaWeb() {
-  const r = await edge.evaluar(`
-    ${AYUDAS}
-    await cargada();
-    await cartas("R C 5 4"); await posicion("Mano"); await calculada();
-    const decidir = document.body.innerText;
-    await pestana("Se ha cortado"); await toca("Dos reyes"); await calculada();
-    const cortado = document.body.innerText;
-    await pestana("Ha habido mus"); await cartas("R R C S"); await calculada();
-    const mus = document.body.innerText;
-    const manifiesto = await (await fetch("datos/manifiesto.json")).json();
-    const rutas = Object.keys(manifiesto.ficheros);
-    const estados = await Promise.all(rutas.map((r) => fetch("datos/" + r).then((x) => x.status, () => 0)));
-    return {
-      decidir: /Quédate con/.test(decidir), cortado: /ganáis/.test(cortado), mus: /Tras el mus/.test(mus),
-      errores: /No se (ha|han) podido cargar/.test(decidir + cortado + mus),
-      datos: estados.filter((s) => s === 200).length, total: rutas.length,
-    };`);
+  const r = await edge.evaluar(MANO_ENTERA);
   afirmar(r.decidir && r.cortado && r.mus && !r.errores, "una mano entera en las tres pestañas, sin errores", JSON.stringify(r));
   afirmar(r.datos === r.total && r.total > 0, `los ${String(r.total)} ficheros de datos están disponibles`);
 }

@@ -33,11 +33,11 @@ function buscarEdge() {
  * usuario y no deja una carpeta nueva en cada ejecución (Edge tarda en soltar
  * sus ficheros y no se puede borrar al acabar).
  */
-export async function abrirEdge({ nombre = "capturas", puerto = 9333 } = {}) {
+export async function abrirEdge({ nombre = "capturas", puerto = 9333, argumentos = [] } = {}) {
   const perfil = join(tmpdir(), `mus-analytics-${nombre}-edge`);
   const navegador = spawn(buscarEdge(), [
     "--headless=new", `--remote-debugging-port=${String(puerto)}`, "--no-first-run",
-    "--no-default-browser-check", "--disable-extensions", `--user-data-dir=${perfil}`, "about:blank",
+    "--no-default-browser-check", "--disable-extensions", `--user-data-dir=${perfil}`, ...argumentos, "about:blank",
   ], { stdio: "ignore" });
 
   let pestana;
@@ -138,4 +138,48 @@ export const AYUDAS = `
   };
   const cargada = () => hasta(() => document.querySelector('[role="tab"]') && !/Cargando datos/.test(document.body.innerText), "los datos");
   const calculada = () => hasta(() => !/Calculando|Cargando/.test(document.body.innerText), "los cálculos");
+`;
+
+/**
+ * Para `evaluar`: cómo está el modo sin conexión en la página. Devuelve la
+ * versión que enseña el pie, si la sirve un service worker, cuántos hay
+ * registrados, si alguno espera y cuántos ficheros tiene cada caché.
+ */
+export const ESTADO_PAGINA = `
+  const registros = await navigator.serviceWorker.getRegistrations();
+  const guardado = {};
+  for (const n of await caches.keys()) guardado[n] = (await (await caches.open(n)).keys()).length;
+  const texto = document.body?.innerText ?? "";
+  return {
+    texto,
+    version: /Versión (\\S+)/.exec(texto)?.[1] ?? null,
+    id: /Versión \\S+ \\(([0-9a-f]{7})\\)/.exec(texto)?.[1] ?? null,
+    controlada: navigator.serviceWorker.controller !== null,
+    registros: registros.length,
+    esperando: registros.some((r) => r.waiting !== null),
+    guardado,
+  };
+`;
+
+/**
+ * Para `evaluar`: una mano entera en las tres pestañas y todos los ficheros de
+ * datos, uno por uno. Devuelve qué ha salido bien.
+ */
+export const MANO_ENTERA = `
+  ${AYUDAS}
+  await cargada();
+  await cartas("R C 5 4"); await posicion("Mano"); await calculada();
+  const decidir = document.body.innerText;
+  await pestana("Se ha cortado"); await toca("Dos reyes"); await calculada();
+  const cortado = document.body.innerText;
+  await pestana("Ha habido mus"); await cartas("R R C S"); await calculada();
+  const mus = document.body.innerText;
+  const manifiesto = await (await fetch("datos/manifiesto.json")).json();
+  const rutas = Object.keys(manifiesto.ficheros);
+  const estados = await Promise.all(rutas.map((r) => fetch("datos/" + r).then((x) => x.status, () => 0)));
+  return {
+    decidir: /Quédate con/.test(decidir), cortado: /ganáis/.test(cortado), mus: /Tras el mus/.test(mus),
+    errores: /No se (ha|han) podido cargar/.test(decidir + cortado + mus),
+    datos: estados.filter((s) => s === 200).length, total: rutas.length,
+  };
 `;
