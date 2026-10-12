@@ -805,3 +805,35 @@ El problema: los móviles que ya tienen un *service worker* siguen usándolo aun
 - La versión publicada (`d5d0e6c`) es la misma que sale al construir en Windows: la construcción da el mismo resultado en Windows y en Linux.
 
 **Pendiente:** las pruebas del usuario en su iPhone (instalación, modo avión y actualización con una 0.1.1). Es lo único que no se ha podido probar aquí: todo lo anterior es en Edge, y el iPhone usa Safari.
+
+### Pruebas en el iPhone y versión 0.1.1 (2026-10-12)
+
+El usuario probó la web publicada en su iPhone 15. **Bien:** la instalación desde Safari, las franjas de arriba (barra de estado) y de abajo (barra de inicio) en claro y en oscuro, y el modo avión con las tres pestañas, las señas, los tres tipos de mesa y la chuleta. Era lo único que no se había podido probar aquí.
+
+Antes de que la instalara se publicó un arreglo: el enlace a las licencias de terceros se abre aparte, como el del código, porque la web instalada no tiene botón de volver.
+
+**Versión 0.1.1**, para probar la actualización. El cambio visible es el número de versión del pie. Antes de publicarla, un Edge guardó la 0.1.0; después (`npm run comprobar-publicada -- --actualizacion despues`), contra la web real de GitHub Pages: abrió con la 0.1.0 que tenía guardada, avisó de la nueva con una mano a medias sin tocarla, y al pulsar «Actualizar» pasó a la 0.1.1 con una sola caché. Queda que el usuario lo confirme en el iPhone.
+
+## 2026-10-12 · Tras usarla en partidas reales: el entrenador pasa delante
+
+**Opinión del usuario después de jugar con la web:**
+- Usarla durante la partida es muy difícil: el juego va demasiado rápido. Su valor real está en analizar manos antes o después de jugar.
+- Lo que más le interesa es un modo entrenamiento, al estilo de los entrenadores de póker: que plantee situaciones y haya que elegir la mejor jugada.
+
+**Decisión:** el entrenador (Fase 5) se adelanta a las mejoras de la versión 2 de la web (señas tras el mus, quién ha cortado, modo torneo). No se empieza todavía: al cerrar el paso 4 se propone su plan.
+
+*Qué cambia en la forma de pensar la web.* La calculadora se diseñó para consultarla con las cartas en la mano: teclado al alcance del pulgar, tres pestañas por momento de la mano, que quepa sin desplazar. Eso sigue sirviendo para repasar una mano, pero ya no es la prioridad. Lo que viene se piensa para quien estudia con calma.
+
+**Lo que el plan de la Fase 5 tiene que tener en cuenta** (pedido por el usuario):
+1. Qué se puede entrenar ya con el modelo en paso (mus o corto, descarte, intuición de las probabilidades) y qué necesita la Fase 6 (envites, órdagos, marcador).
+2. Puntuar por los tantos perdidos frente a la mejor opción, no por acierto o fallo. Si la diferencia está dentro del margen de error, cualquier opción vale.
+3. Si se puede empezar sin servidor, con todo precalculado y el progreso guardado en el móvil.
+4. Qué manos plantear: al azar con su frecuencia real, o centrándose en las decisiones dudosas, que son las que enseñan.
+5. No llamarlo "GTO": no hay un equilibrio fiable (el del modelo es degenerado). Es la mejor respuesta frente al tipo de mesa elegido, y la mesa "Normal" está calibrada con sus partidas reales. Hay que explicarlo así, en lenguaje de jugador.
+6. Más adelante, el entrenador podría recoger de forma anónima las decisiones de los usuarios, como primer conjunto de datos de mus con jugadores reales. No para la primera versión, pero el diseño no debe impedirlo.
+
+**Datos reales: plan de recogida.** El usuario seguirá apuntando partidas en `datos/manos_reales.csv`, ahora rellenando su posición en cada mano y si ha usado la web (las dos columnas ya existían, vacías en las 87 filas actuales).
+- **Meta: unas 200 manos en total.** Con una frecuencia de mus del 34 %, el intervalo al 95 % es de ± 6,6 puntos, y ± 7,0 con el factor 1,06 por la variación entre partidas. Hoy, con 71 manos, es de ± 11.
+- **Revisión de la calibración cada 50 manos más o menos** (`python -m mus manos-reales` y `python -m mus calibrar`).
+- **Sigue la regla:** la mesa "Normal" solo cambia si el intervalo excluye el 30 %. Con 200 manos, eso pasaría con una frecuencia observada de alrededor del 37 % o más (o del 23 % o menos): con el 34 % actual, seguiría sin cambiar.
+- Las dos columnas nuevas servirán para dos cosas que hoy no se pueden mirar: si el usuario corta distinto que el resto de la mesa (juega todas las partidas, y es una de las limitaciones anotadas) y si usar la web cambia lo que hace.
