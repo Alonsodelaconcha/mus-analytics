@@ -3,8 +3,9 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["node"],
-    "allowJs": true
+    "types": ["node", "vite/client"],
+    "allowJs": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["test", "vite.config.ts", "eslint.config.js"]
+  "include": ["test", "plugins", "vite.config.ts", "eslint.config.js", "src/entorno.d.ts"]
 }

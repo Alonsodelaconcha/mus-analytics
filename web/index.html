@@ -2,9 +2,24 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: la web ocupa toda la pantalla y los estilos dejan libres
+         las zonas seguras del móvil (isla de arriba, barra de inicio de abajo). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Calculadora de mus a 8 reyes: probabilidades, ¿mus o corto? y descarte." />
     <title>Mus Analytics</title>
+
+    <!-- Web instalable: nombre, colores e iconos. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121619" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/iconos/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/iconos/icono-192.png" />
+    <!-- iPhone: «Añadir a pantalla de inicio» usa estas etiquetas. -->
+    <link rel="apple-touch-icon" href="/iconos/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Mus Analytics" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   </head>
   <body>
     <div id="raiz"></div>

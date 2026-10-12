@@ -11,6 +11,8 @@ import {
   porcentaje,
   tantosPorMano,
   textoOpcion,
+  textoSinConexion,
+  textoVersion,
 } from "../src/vista/lenguaje";
 
 // Intl en español usa un espacio duro antes del %; se normaliza para comparar.
@@ -93,5 +95,24 @@ describe("descartes en palabras", () => {
     });
     expect(texto("R 4 4 S", "R").detalle).toBe("Pides 3: tiras la sota y los dos cuatros");
     expect(texto("A A 4 5", "")).toMatchObject({ titulo: "Tíralas todas", detalle: "Pides 4: tiras las cuatro" });
+  });
+});
+
+describe("versión y modo sin conexión", () => {
+  it("una frase para cada estado", () => {
+    expect(textoSinConexion({ tipo: "lista", version: "abc1234def567890" })).toBe("Lista para usar sin conexión.");
+    expect(textoSinConexion({ tipo: "nueva", version: null })).toBe("Lista para usar sin conexión. Hay una versión nueva.");
+    expect(textoSinConexion({ tipo: "preparando" })).toBe("Guardando la web para usarla sin conexión…");
+    expect(textoSinConexion({ tipo: "error" })).toMatch(/^No se ha podido guardar/);
+    expect(textoSinConexion({ tipo: "no-disponible" })).toBe("Aquí no se puede usar sin conexión.");
+  });
+
+  it("la versión, el identificador de lo guardado (si lo hay) y la fecha de los datos", () => {
+    expect(textoVersion("0.1.0", { tipo: "lista", version: "abc1234def567890" }, "2026-10-07"))
+      .toBe("Versión 0.1.0 (abc1234) · datos del 2026-10-07");
+    expect(textoVersion("0.1.0", { tipo: "nueva", version: "abc1234def567890" }, "2026-10-07"))
+      .toBe("Versión 0.1.0 (abc1234) · datos del 2026-10-07");
+    expect(textoVersion("0.1.0", { tipo: "nueva", version: null }, "2026-10-07")).toBe("Versión 0.1.0 · datos del 2026-10-07");
+    expect(textoVersion("0.1.0", { tipo: "preparando" }, null)).toBe("Versión 0.1.0");
   });
 });

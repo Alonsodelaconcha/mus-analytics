@@ -9,6 +9,7 @@
 import { type Conteos, N_RANGOS, SIMBOLOS, rangos } from "../nucleo/cartas";
 import { type OpcionDescarte } from "../nucleo/descarte";
 import { Pares, clavePares, suma } from "../nucleo/evaluacion";
+import { type EstadoSinConexion } from "../sinConexion";
 
 const ENTERO = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
 const UN_DECIMAL = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -163,6 +164,35 @@ export function textoOpcion(opcion: OpcionDescarte): TextoOpcion {
   const pides = `Pides ${n}`;
   const detalle = n === 4 ? `${pides}: tiras las cuatro` : `${pides}: tiras ${lista(opcion.descartadas)}`;
   return { titulo, detalle, quedo, tiro };
+}
+
+/** Lo que se le cuenta al jugador del modo sin conexión. */
+export function textoSinConexion(estado: EstadoSinConexion): string {
+  switch (estado.tipo) {
+    case "lista":
+      return "Lista para usar sin conexión.";
+    case "nueva":
+      return "Lista para usar sin conexión. Hay una versión nueva.";
+    case "preparando":
+      return "Guardando la web para usarla sin conexión…";
+    case "error":
+      return "No se ha podido guardar para usarla sin conexión. Se intentará otra vez al abrirla con cobertura.";
+    case "no-disponible":
+      return "Aquí no se puede usar sin conexión.";
+  }
+}
+
+/**
+ * "Versión 0.1.0 (a1b2c3d) · datos del 2026-10-07": para saber qué versión hay
+ * en el móvil. Entre paréntesis, el identificador de lo guardado para usar sin
+ * conexión (cambia con cualquier cambio del código o de los datos).
+ */
+export function textoVersion(version: string, estado: EstadoSinConexion, datos: string | null): string {
+  const guardada = estado.tipo === "lista" || estado.tipo === "nueva" ? estado.version : null;
+  return [
+    `Versión ${version}${guardada === null ? "" : ` (${guardada.slice(0, 7)})`}`,
+    ...(datos === null ? [] : [`datos del ${datos}`]),
+  ].join(" · ");
 }
 
 /** Conteos vacíos (sin cartas), útiles para empezar una mano. */

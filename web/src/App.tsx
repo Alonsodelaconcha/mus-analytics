@@ -1,5 +1,6 @@
-import { type ReactNode, useMemo, useReducer, useState } from "react";
+import { type ReactNode, useMemo, useReducer, useState, useSyncExternalStore } from "react";
 
+import { Creditos } from "./componentes/Creditos";
 import { Decision, SelectorMesa } from "./componentes/Decision";
 import { Descartes } from "./componentes/Descartes";
 import { FilaLances } from "./componentes/FilaLances";
@@ -22,6 +23,7 @@ import {
   opcionesDe,
 } from "./nucleo/datos";
 import { tablaParaSenas } from "./nucleo/senas";
+import { SIN_SERVICE_WORKER, type SinConexion } from "./sinConexion";
 import { indiceMano } from "./nucleo/tablas";
 import { describirMano } from "./vista/lenguaje";
 import {
@@ -42,7 +44,12 @@ const esTexto = (v: string): v is string => v.length > 0;
  * - «Se ha cortado»: las señas y las probabilidades con las cartas del reparto;
  * - «Ha habido mus»: las cartas nuevas y las probabilidades tras el mus.
  */
-export function App({ cargador }: { cargador: Cargador }) {
+export function App({ cargador, sinConexion = SIN_SERVICE_WORKER }: {
+  cargador: Cargador;
+  sinConexion?: SinConexion;
+}) {
+  const guardado = useSyncExternalStore(sinConexion.suscribir, sinConexion.estado);
+
   // Reintentar (p. ej. al volver la cobertura) crea una carga nueva.
   const [promesaDatos, setPromesaDatos] = useState(() => Datos.cargar(cargador));
   const datos = usePromesa(promesaDatos);
@@ -214,6 +221,13 @@ export function App({ cargador }: { cargador: Cargador }) {
       </header>
 
       <main>
+        {guardado.tipo === "nueva" && (
+          <div className="aviso aviso--version" role="status">
+            <p>Hay una versión nueva. Al actualizar se empieza una mano nueva.</p>
+            <button type="button" className="boton" onClick={sinConexion.actualizar}>Actualizar</button>
+          </div>
+        )}
+
         <TuMano
           titulo={trasMus ? "Tu mano después del mus" : "Tu mano"}
           cartas={rangos(mano)}
@@ -238,6 +252,7 @@ export function App({ cargador }: { cargador: Cargador }) {
         </div>
 
         <Limitaciones manifiesto={manifiesto} />
+        <Creditos guardado={guardado} datos={manifiesto?.generado ?? null} />
       </main>
 
       <div className="pie">

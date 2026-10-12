@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/App";
+import { type EstadoSinConexion, type SinConexion } from "../src/sinConexion";
 import { leerDato } from "./ayuda";
 
 beforeAll(() => {
@@ -336,5 +337,69 @@ describe("carga de datos", () => {
     falla = false;
     await usuario.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByText("Mete tus 4 cartas con el teclado de abajo.")).toBeDefined();
+  });
+});
+
+describe("versión y modo sin conexión", () => {
+  /** Un modo sin conexión de mentira, al que se le puede cambiar el estado. */
+  function sinConexionFalso(inicial: EstadoSinConexion) {
+    let estado = inicial;
+    const oyentes = new Set<() => void>();
+    const actualizar = vi.fn();
+    const sc: SinConexion = {
+      estado: () => estado,
+      suscribir: (f) => {
+        oyentes.add(f);
+        return () => { oyentes.delete(f); };
+      },
+      actualizar,
+    };
+    const poner = (nuevo: EstadoSinConexion) => {
+      estado = nuevo;
+      act(() => { for (const f of oyentes) f(); });
+    };
+    return { sc, poner, actualizar };
+  }
+
+  it("sin service worker (red local, desarrollo): lo dice en el pie, con la versión y el enlace al código", async () => {
+    await empezar();
+    const pie = screen.getByRole("contentinfo");
+    expect(within(pie).getByText(/^Versión \d+\.\d+\.\d+ · datos del \d{4}-\d{2}-\d{2}$/)).toBeDefined();
+    expect(within(pie).getByText("Aquí no se puede usar sin conexión.")).toBeDefined();
+    expect(within(pie).getByRole("link", { name: "Código fuente" }).getAttribute("href"))
+      .toBe("https://github.com/Alonsodelaconcha/mus-analytics");
+    expect(screen.queryByRole("button", { name: "Actualizar" })).toBeNull();
+  });
+
+  it("el pie sigue el estado: guardando, lista (con el identificador de lo guardado) y error", async () => {
+    const { sc, poner } = sinConexionFalso({ tipo: "preparando" });
+    render(<App cargador={cargador} sinConexion={sc} />);
+    await screen.findByText("Mete tus 4 cartas con el teclado de abajo.");
+    const pie = screen.getByRole("contentinfo");
+    expect(within(pie).getByText("Guardando la web para usarla sin conexión…")).toBeDefined();
+    poner({ tipo: "lista", version: "abc1234def567890" });
+    expect(within(pie).getByText("Lista para usar sin conexión.")).toBeDefined();
+    expect(within(pie).getByText(/^Versión \S+ \(abc1234\) · datos del/)).toBeDefined();
+    poner({ tipo: "error" });
+    expect(within(pie).getByText(/^No se ha podido guardar/)).toBeDefined();
+  });
+
+  it("versión nueva: avisa arriba sin tocar la mano a medias, y «Actualizar» le da paso", async () => {
+    const { sc, poner, actualizar } = sinConexionFalso({ tipo: "lista", version: "abc1234def567890" });
+    const usuario = userEvent.setup();
+    render(<App cargador={cargador} sinConexion={sc} />);
+    await screen.findByText("Mete tus 4 cartas con el teclado de abajo.");
+    await meterCartas(usuario, ["rey", "caballo", "cinco", "cuatro"]);
+    await usuario.click(screen.getByRole("button", { name: "Mano" }));
+    expect(await screen.findByText("Da mus")).toBeDefined();
+
+    poner({ tipo: "nueva", version: "abc1234def567890" });
+    expect(screen.getByText("Hay una versión nueva. Al actualizar se empieza una mano nueva.")).toBeDefined();
+    expect(cartasEnMano()).toHaveLength(4);
+    expect(screen.getByText("Da mus")).toBeDefined();
+    expect(actualizar).not.toHaveBeenCalled();
+
+    await usuario.click(screen.getByRole("button", { name: "Actualizar" }));
+    expect(actualizar).toHaveBeenCalledTimes(1);
   });
 });

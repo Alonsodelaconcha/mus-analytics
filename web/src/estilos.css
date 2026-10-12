@@ -88,10 +88,15 @@ h1, h2, h3 {
 
 /* --- Estructura -------------------------------------------------------------------- */
 
+/* Zonas seguras del móvil (viewport-fit=cover en index.html): arriba, la isla o la
+   barra de estado; abajo, la barra de inicio; a los lados, con el móvil tumbado.
+   Valen 0 donde no las hay. */
 .app {
   max-width: 34rem;
   margin: 0 auto;
-  padding: 0 1rem calc(var(--acciones-alto) + var(--pestanas-alto) + 1rem + env(safe-area-inset-bottom));
+  padding: env(safe-area-inset-top) max(1rem, env(safe-area-inset-right))
+    calc(var(--acciones-alto) + var(--pestanas-alto) + 1rem + env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
 }
 
 .app[data-pie="teclado"] {
@@ -338,7 +343,10 @@ h1, h2, h3 {
   background: var(--superficie);
   border-top: 1px solid var(--borde);
   box-shadow: 0 -2px 10px rgb(0 0 0 / 10%);
-  padding: 0 max(0.75rem, calc((100vw - 34rem) / 2)) calc(0.45rem + env(safe-area-inset-bottom));
+  /* Las pestañas quedan por encima de la barra de inicio del móvil. */
+  padding: 0 max(0.75rem, env(safe-area-inset-right), calc((100vw - 34rem) / 2))
+    calc(0.45rem + env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left), calc((100vw - 34rem) / 2));
 }
 
 .teclado {
@@ -915,4 +923,33 @@ h1, h2, h3 {
 
 .fila-lances__detalle .nota {
   margin: 0;
+}
+
+/* --- Versión nueva y pie de la página ------------------------------------------------- */
+
+.aviso--version {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0 0.6rem;
+}
+
+.aviso--version p {
+  margin: 0;
+  flex: 1;
+}
+
+.creditos {
+  margin: 0.75rem 0.5rem 0;
+  color: var(--suave);
+  font-size: 0.8rem;
+}
+
+.creditos p {
+  margin: 0.15rem 0;
+}
+
+.creditos a {
+  color: inherit;
+  text-underline-offset: 3px;
 }

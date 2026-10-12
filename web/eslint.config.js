@@ -43,7 +43,12 @@ export default defineConfig(
     },
   },
   {
-    files: ["test/**/*.ts", "vite.config.ts", "eslint.config.js"],
+    // El service worker solo existe en contextos seguros: ahí sí puede usar la caché y crypto.subtle.
+    files: ["sw/**/*.ts"],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
+    files: ["test/**/*.ts", "plugins/**/*.ts", "vite.config.ts", "eslint.config.js"],
     languageOptions: { globals: globals.node },
   },
   {
