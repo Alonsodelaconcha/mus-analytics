@@ -696,3 +696,92 @@ Al tocar un lance, la página se desplaza lo justo para que su frase no quede ba
 - Por localhost (servidor de desarrollo y versión construida) y por la IP de red (http://192.168.1.37:4173, versión construida): en las cinco escenas, sin errores en la consola. Por la IP de red, sin contexto seguro ni `crypto.subtle`, como debe ser.
 - En un navegador real, el toque equivocado: reparto con seña → «Ha habido mus» (mano vacía) → dos cartas → «Se ha cortado» restaura R C 5 4, la seña y la posición.
 - Capturas a 390 × 844, en claro y en oscuro, en `resultados/capturas` (no se versionan).
+
+## 2026-10-12 · Fase 4, paso 4: publicación
+
+El usuario aprobó el paso 3 tras probar la estructura A en su móvil y aprobó el plan de publicación con sus decisiones. Móvil de referencia: iPhone 15 (393 × 852).
+
+### Qué queda expuesto al hacer público el repositorio
+
+Se revisaron los ficheros y el historial completo (24 commits, una rama) antes de tocar nada:
+
+| Qué | Lo que había | Decisión |
+|---|---|---|
+| Email | El gmail del usuario como autor y committer de los 24 commits; en ningún fichero | **Reescribir** con su dirección `noreply` de GitHub |
+| Nombre | Nombre y apellidos en los commits; el usuario de GitHub también los lleva | Se deja: es un portfolio |
+| Rutas y nombres | Ninguna ruta personal ni nombre en ficheros, historial o mensajes; dos IP privadas | Nada: no identifican |
+| `datos/` | 87 filas sin nombres, fechas ni lugares | Se publican |
+| `CLAUDE.md` y `docs/` | Se ve que el proyecto está hecho con Claude Code, y cómo | Se publican tal cual; el README lo dice en una línea |
+| `.claude/` | Solo `launch.json`, nunca en git; la exclusión era local | `.claude/` a `.gitignore` |
+| Secretos | Ninguno | — |
+
+**Historial reescrito.** Solo cambian los campos de email de autor y committer (`git filter-branch --env-filter`); `git config user.email` se cambió antes de cualquier commit nuevo. Comprobado después: los 30 commits llevan la dirección `noreply` en los dos campos; el árbol, los nombres, las fechas, los asuntos y los mensajes de cada commit son idénticos a los de antes; el contenido final no cambia.
+- *Por qué antes de publicar:* con el repositorio privado, un solo autor y ningún documento que cite hashes, cuesta poco. Una vez público, ya no sirve.
+- *Por qué borrar y volver a crear el repositorio en GitHub, y no un push forzado:* tras un push forzado, GitHub conserva los commits antiguos accesibles por su hash, y la pestaña «Activity» los enlaza.
+- *Copia de seguridad:* `resultados/copia-seguridad/mus-analytics-antes-de-reescribir.bundle` (fuera de git; contiene el email antiguo). **No se borra hasta que el usuario confirme que la web publicada funciona.**
+- *Alternativas:* dejar el email (sin trabajo, pero público para siempre); un repositorio nuevo con un solo commit (se pierde el historial, que es parte del portfolio).
+
+**Datos sin conversión de fin de línea.** `web/public/datos` y `web/test/referencia` se marcan `-text` en `.gitattributes`. La web comprueba la huella SHA-256 de cada fichero, y tiene que ser la misma en Windows, en GitHub y en el móvil. Hoy coinciden (los ficheros no tienen saltos de línea), pero con `text=auto` un cambio del exportador podía romperlo sin avisar.
+
+### Licencia: AGPL-3.0
+
+Decisión del usuario, con su motivo: la protección se puede reducir más adelante, pero no aumentar. De AGPL se puede pasar a MIT en versiones futuras; lo publicado con MIT queda libre para siempre. Como la web puede llegar a tener usuarios (Fase 5), prefiere que nadie pueda sacar una versión cerrada: la AGPL obliga a publicar el código también a quien la ofrezca como servicio web.
+
+- `LICENSE` es el texto oficial de gnu.org, sin cambios; `pyproject.toml` y `package.json` declaran `AGPL-3.0-only`.
+- **Dependencias compatibles.** Todas tienen licencias permisivas (MIT, BSD, Apache-2.0, ISC, MPL-2.0, PSF). Dentro del JavaScript publicado solo van `react`, `react-dom` y `scheduler` (MIT). La MIT pide conservar su aviso: el plugin escribe `licencias-de-terceros.txt` al construir, a partir de los módulos que entran de verdad en el paquete, y la web lo enlaza en el pie.
+- **Enlace al código en la propia web** («Código fuente · licencia AGPL-3.0»): es lo que la AGPL exige ofrecer a quien usa una versión modificada por la red, y aquí queda puesto desde el principio.
+- **Límites que conviene conocer** (no cambian la elección): la licencia se apoya en los derechos de autor, y cuánto protegen el código escrito con una IA es una cuestión legal sin cerrar; los datos y las cifras tienen una protección más débil que el código; y si algún día se aceptan contribuciones de otras personas, para cambiar de licencia hará falta su permiso.
+
+### GitHub Pages
+
+- **Ruta base `./`** en Vite: la misma versión construida sirve en localhost, por la IP de red y en `https://alonsodelaconcha.github.io/mus-analytics/`.
+- **La publicación solo construye la web** (`npm ci`, `npm run verificar`, `npm run build`): los datos ya están versionados. Un segundo flujo, aparte, pasa los tests rápidos de Python en cada cambio; en una copia limpia, sin la caché local, tardan menos de un minuto.
+- El flujo de publicación es el último commit, después de hacer público el repositorio: antes fallaría, porque Pages no está disponible.
+
+### Modo sin conexión: *service worker* propio
+
+**Cada versión publicada es un conjunto cerrado de ficheros con su huella.** Al construir, el plugin (`web/plugins/sinConexion.ts`) recorre la carpeta de salida, calcula el SHA-256 de cada fichero (31: la página, el JS, el CSS, los iconos y los 21 de datos) y mete la lista en `sw.js`. La huella de la lista es el identificador de la versión. De ahí sale todo lo demás:
+
+- **`sw.js` va siempre en la misma dirección**, sin huella en el nombre: el navegador lo compara byte a byte con el que tiene. Como lleva la lista dentro, cualquier cambio del código o de los datos lo convierte en una versión nueva. Se pide sin caché HTTP (`updateViaCache: "none"`).
+- **Todo o nada.** Una versión se descarga entera a su propia caché (`mus-analytics-<versión>`), pidiendo cada fichero sin caché HTTP y comprobando su huella. Si uno falla, llega a medias o no coincide, la caché se borra y la instalación falla: el navegador descarta ese *service worker* y la versión anterior sigue entera. Se reintenta en la siguiente comprobación.
+- **Se guarda todo al instalar**, no según se usa: si no, una tabla de señas que nunca se abrió faltaría en modo avión.
+- **La versión nueva espera.** No toma el mando por su cuenta: la página avisa («Hay una versión nueva. Al actualizar se empieza una mano nueva.») y solo cambia al pulsar «Actualizar», o sola al abrir la web si ya había una esperando, cuando todavía no hay ninguna mano a medias. Al cambiar se borran las cachés anteriores y la página se recarga: nunca se mezclan el código de una versión y los datos de otra.
+- **Cuándo se busca:** al abrir la web y, como las webs instaladas en el móvil no se recargan sino que se quedan dormidas, también al volver a ella (como mucho una vez por minuto).
+- **Solo se registra si existe** (`"serviceWorker" in navigator`) y en la web construida. Por la red local (HTTP) no lo hay y la web funciona igual; lo dice en el pie: «Aquí no se puede usar sin conexión».
+- **La comprobación de la web sigue ahí** como segunda barrera: valida el manifiesto contra el núcleo y la huella de cada fichero al cargarlo. El plugin comprueba además, al construir, que los datos publicados son byte a byte los del manifiesto.
+- **Pie de la web:** «Versión 0.1.0 (d5d0e6c) · datos del 2026-10-07» y el estado («Lista para usar sin conexión»). Sirve para saber qué versión hay en el móvil.
+
+**Alternativas descartadas:**
+- *`vite-plugin-pwa` (Workbox):* es lo habitual y ahorra código, pero la lógica delicada (qué pasa si una descarga falla, cuándo se cambia de versión) queda dentro de la librería. Aquí son unas 100 líneas, separadas en `web/sw/logica.ts` para poder probarlas con una caché y una red de mentira.
+- *Que la versión nueva tome el mando enseguida* (`skipWaiting` al instalar): recargaría la página a mitad de una mano.
+- *Guardar cada fichero la primera vez que se pide:* más simple, pero no garantiza que la web esté entera sin conexión ni que todos los ficheros sean de la misma versión.
+
+### Salida de emergencia: si se publica un *service worker* con un fallo
+
+El problema: los móviles que ya tienen un *service worker* siguen usándolo aunque se corrija la web, porque es él quien sirve la página. Lo único que el navegador pide siempre a la red, sin pasar por el *service worker*, es el propio `sw.js`: por eso su dirección no cambia nunca.
+
+**Qué hacer:**
+1. `npm run build:emergencia` (en `web/`). Construye la web con `web/sw/emergencia.ts` como `sw.js`, y una página que no registra ningún *service worker*.
+2. Publicarla (en GitHub: lanzar a mano el flujo de publicación con la opción de emergencia, o subir ese cambio).
+3. En cada móvil, la próxima vez que abra la web con conexión: el navegador encuentra el `sw.js` nuevo, que toma el mando enseguida, **borra las cachés de la web, se desregistra y recarga la página**, que vuelve a salir de la red.
+4. Corregir el fallo y publicar una versión normal: la web vuelve a guardarse sola.
+
+**Límites:** hace falta que el móvil abra la web con conexión (sin conexión sigue con la versión que tenga). Y está probado en Edge (Chromium), no en Safari: en el iPhone solo se puede comprobar publicándola.
+
+**Probado en local** (paso 6 de `npm run prueba-sin-conexion`): con una versión normal instalada, se publica la de emergencia; el navegador queda sin *service worker* y sin cachés, la web funciona desde la red y dice «Aquí no se puede usar sin conexión», al recargar no se vuelve a registrar, y al publicar otra vez una versión normal vuelve a guardarse. Aparte se probó el caso menos favorable: abrir la web con una navegación normal cuando la página anterior sigue en la caché HTTP del navegador (GitHub Pages la deja 10 minutos). A los dos segundos la página ya es la nueva, y no hay bucle de recargas: `index.html` y `sw.js` se piden una sola vez.
+
+### Instalación en el iPhone
+
+- Manifiesto de la web (`manifest.webmanifest`), iconos y las etiquetas `apple-*` que usa «Añadir a pantalla de inicio». La barra de estado en estilo `default`: la pone el sistema, con texto legible en claro y en oscuro.
+- **Zonas seguras:** `viewport-fit=cover` y márgenes con `env(safe-area-inset-*)` arriba (isla), abajo (barra de inicio; las pestañas quedan por encima) y a los lados.
+- **Icono propio:** dos naipes lisos sobre el verde de la web y un 31, la mejor jugada. No usa dibujos de ninguna baraja. Sale de `web/scripts/iconos.mjs` (`npm run iconos`); los PNG se versionan.
+- En el iPhone, la web instalada tiene su propio almacenamiento, distinto del de Safari: hay que abrirla una vez con conexión para que se guarde.
+
+### Pruebas
+
+- **Tests unitarios** (199 en la web; 50 nuevos): la lógica del *service worker* con una caché y una red de mentira (todo o nada con cinco tipos de fallo), la lista de ficheros y la versión, la comprobación de los datos, la parte de la página (cuándo se recarga y cuándo no) y la interfaz.
+- **En un navegador de verdad** (`npm run prueba-sin-conexion`, Edge sin ventana): 58 comprobaciones con un servidor propio en `/mus-analytics/`, con la misma caché HTTP que GitHub Pages, que se apaga para simular el modo avión y hace fallar un fichero de datos **a mitad de la descarga** (con el resto ya descargado) de tres formas: corte de la conexión, contenido cambiado y error 500. En los tres casos la versión nueva no se instala y la anterior sigue entera, también sin red.
+- **Zonas seguras** (`npm run capturas -- --instalada`): simula las del iPhone 15 (59 px arriba, 34 abajo), las dibuja en la captura y falla si algún botón o texto queda dentro.
+- **Los tests detectan los errores que deben.** Con fallos puestos a propósito: sin comprobar la huella, sin borrar la caché a medias, sin desregistrarse en la emergencia, sin márgenes de zona segura, y recargando sin esperar al cambio de versión.
+
+**Error encontrado en la propia prueba.** Con un fallo puesto a propósito (la versión nueva tomaba el mando sin esperar), la primera versión de la prueba pasaba entera. Miraba la página en cuanto aparecía el aviso, y en ese instante todo estaba todavía en su sitio: la recarga llegaba después. Ahora espera tres segundos, vuelve a mirar y exige que haya una versión esperando. *Lección:* una prueba que comprueba que algo **no** pasa tiene que dar tiempo a que pase.
