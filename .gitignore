@@ -181,3 +181,6 @@ cython_debug/
 .cursorindexingignore
 # Salidas generadas por la CLI
 resultados/
+
+# Configuración local de Claude Code (servidores de prueba, permisos): no se publica
+.claude/

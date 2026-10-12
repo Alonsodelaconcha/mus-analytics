@@ -1,9 +1,11 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
-# Datos generados con `python -m mus exportar-web`: no se editan a mano
-web/public/datos/** linguist-generated=true
-web/test/referencia/** linguist-generated=true
+# Datos generados con `python -m mus exportar-web`: no se editan a mano.
+# `-text`: git no les toca los fines de línea. La web comprueba la huella SHA-256
+# de cada fichero, y tiene que ser la misma en Windows, en GitHub y en el móvil.
+web/public/datos/** linguist-generated=true -text
+web/test/referencia/** linguist-generated=true -text
 
 # Generados con `python -m mus manos-reales` a partir de datos/manos_reales.csv
 datos/mus_real.csv linguist-generated=true
