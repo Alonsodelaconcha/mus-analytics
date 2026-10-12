@@ -19,7 +19,7 @@ Mete tus cuatro cartas y tu posición, y te dice si conviene dar mus o cortar, q
 
 La primera vez que la abras desde el icono necesita conexión. Cuando el pie de la página diga «Lista para usar sin conexión», ya no hace falta cobertura.
 
-> **Estado:** motor terminado en sus tres primeras fases (cálculo exacto de probabilidades, equity por posición y descarte / cortar mus) y web publicada (versión 0.1). Todas las cifras son en paso, sin envites: ver [Limitaciones](#limitaciones).
+> **Estado:** terminadas las cuatro primeras fases: el motor (cálculo exacto de probabilidades, equity por posición y descarte / cortar mus) y la web, publicada en su versión 0.1.1. Lo siguiente es un modo entrenamiento. Todas las cifras son en paso, sin envites: ver [Limitaciones](#limitaciones).
 
 **Cómo se ha hecho.** El código lo ha programado [Claude Code](https://claude.com/claude-code), el asistente de Anthropic, bajo mi dirección: yo defino las reglas de mi mesa, reviso los resultados, aporto los datos de las partidas reales y apruebo cada decisión. Todas están en [docs/decisiones.md](docs/decisiones.md), con sus alternativas y los errores encontrados por el camino.
 

@@ -2,6 +2,8 @@
 
 Fecha: 2026-10-07. **Aprobado** por el usuario con las respuestas del final; los cambios respecto a la propuesta original están en la última sección.
 
+**Fase terminada y aprobada el 2026-10-12:** web publicada en <https://alonsodelaconcha.github.io/mus-analytics/>, versión 0.1.1. El cierre está en `docs/decisiones.md`.
+
 **Idea general.** El motor en Python sigue siendo la referencia y genera todos los datos. La web solo los consulta y hace las cuentas ligeras. Así no hay que portar al navegador lo difícil y no hay riesgo de que las dos versiones den números distintos.
 
 **Qué se hace en el navegador y qué se precalcula**

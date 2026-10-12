@@ -837,3 +837,40 @@ Antes de que la instalara se publicó un arreglo: el enlace a las licencias de t
 - **Revisión de la calibración cada 50 manos más o menos** (`python -m mus manos-reales` y `python -m mus calibrar`).
 - **Sigue la regla:** la mesa "Normal" solo cambia si el intervalo excluye el 30 %. Con 200 manos, eso pasaría con una frecuencia observada de alrededor del 37 % o más (o del 23 % o menos): con el 34 % actual, seguiría sin cambiar.
 - Las dos columnas nuevas servirán para dos cosas que hoy no se pueden mirar: si el usuario corta distinto que el resto de la mesa (juega todas las partidas, y es una de las limitaciones anotadas) y si usar la web cambia lo que hace.
+
+## 2026-10-12 · Fase 4 terminada
+
+**La última prueba, bien.** En el iPhone del usuario, con una mano a medias salió el aviso de versión nueva sin tocar la mano; «Actualizar» pasó a la 0.1.1 (`60df1e6`), que funciona en modo avión. El usuario aprueba el paso 4 y la Fase 4.
+
+**Qué deja la fase:** <https://alonsodelaconcha.github.io/mus-analytics/>, versión 0.1.1.
+1. *Exportador* (`python -m mus exportar-web`): 21 ficheros de datos precalculados (3 MB) con su huella, y los ficheros de referencia para comprobar el núcleo de la web.
+2. *Núcleo en TypeScript*: traducción exacta de la parte del motor que se calcula en el navegador, comparada con Python sin ninguna tolerancia.
+3. *Interfaz*: tres pestañas, una por momento de la mano («¿Mus o corto?», «Se ha cortado», «Ha habido mus»), pensada para el móvil.
+4. *Publicación*: repositorio público con el historial limpio, licencia AGPL-3.0, GitHub Pages con GitHub Actions, web instalable y uso sin conexión con un *service worker* propio.
+
+**Pruebas al cerrar** (todas bien):
+
+| Qué | Cuántas |
+|---|---|
+| Motor, tests rápidos (`pytest`) | 323 |
+| Motor, tests lentos (`pytest -m slow`) | 47 |
+| Web: tipos, lint y tests (`npm run verificar`) | 201 |
+| Modo sin conexión en Edge (`npm run prueba-sin-conexion`) | 58 comprobaciones |
+| Web publicada (`npm run comprobar-publicada -- --version 0.1.1`) | 14 comprobaciones |
+| Paso de la 0.1.0 a la 0.1.1 en Edge, contra la web publicada | 6 comprobaciones |
+| En el iPhone 15 del usuario | instalación, zonas seguras, modo avión y actualización |
+
+**Cierre:**
+- Etiqueta `v0.1.1` en el commit del que salió la versión publicada. A partir de ahora, cada versión publicada lleva la suya.
+- La copia de seguridad del historial anterior a la reescritura se retiró del proyecto, a petición del usuario, una vez comprobada la web publicada. Nunca se subió.
+
+**Lo que no se ha probado:** ningún móvil Android. La web instalada y el modo sin conexión están comprobados en Chromium (Edge) y en el iPhone del usuario.
+
+**Lo que queda para después**, anotado en los pendientes de `CLAUDE.md`: señas tras el mus, tener en cuenta quién ha cortado, que las señas cuenten en «¿Mus o corto?» y el modo torneo. Todo eso va detrás del entrenador.
+
+**Tres cosas aprendidas en la fase:**
+- *Probar en las mismas condiciones que el usuario.* La web falló al abrirla por la red local porque ahí no hay contexto seguro; desde entonces se prueba también por la IP de red, y una regla de ESLint impide usar esas funciones sin comprobar antes que existen.
+- *Una prueba de que algo no pasa tiene que dar tiempo a que pase.* La primera prueba del modo sin conexión daba por buena una versión que recargaba la página a mitad de una mano.
+- *Usarla enseña más que diseñarla.* La calculadora se pensó para consultarla durante la partida, y en la mesa el juego va demasiado rápido. Lo que el usuario quiere de verdad es entrenar.
+
+**Siguiente:** Fase 5, el entrenador. Su plan se propone en una sesión nueva.
