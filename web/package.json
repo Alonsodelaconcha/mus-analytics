@@ -1,7 +1,7 @@
 {
   "name": "mus-analytics-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mus Analytics: calculadora de mus a 8 reyes para el móvil",
   "license": "AGPL-3.0-only",
   "author": "Alonso de la Concha Sampedro",
