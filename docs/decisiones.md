@@ -874,3 +874,19 @@ Antes de que la instalara se publicó un arreglo: el enlace a las licencias de t
 - *Usarla enseña más que diseñarla.* La calculadora se pensó para consultarla durante la partida, y en la mesa el juego va demasiado rápido. Lo que el usuario quiere de verdad es entrenar.
 
 **Siguiente:** Fase 5, el entrenador. Su plan se propone en una sesión nueva.
+
+## 2026-10-12 · Los dos códigos de una versión: el del pie y el commit
+
+**Pregunta del usuario:** el pie de la web publicada dice «Versión 0.1.1 (60df1e6)», pero la etiqueta `v0.1.1` apunta al commit `01c64d0`. ¿Cuál es el bueno?
+
+**Los dos: son cosas distintas.**
+- `01c64d0` es el **commit de git** del que se construyó la versión publicada. La etiqueta `v0.1.1` apunta a él y está bien puesta.
+- `60df1e6` **no es un commit** (git no tiene ningún objeto con ese nombre). Son los 7 primeros caracteres del **identificador de lo guardado** (`60df1e6e47eebcfb`): la huella SHA-256 de la lista de los 31 ficheros publicados con la huella de cada uno, que calcula `web/plugins/sinConexion.ts` al construir. Es el nombre de la caché del móvil (`mus-analytics-60df1e6e47eebcfb`) y lo que cambia cuando hay una versión nueva.
+
+**Por qué el pie enseña ese y no el commit.** El pie responde a «¿qué hay guardado en este móvil?», y eso lo decide el contenido de los ficheros, no el historial. El identificador sale también en una web construida en local con cambios sin confirmar (`npm run movil-final`), donde un commit diría algo falso. Y dos commits con la misma web dan el mismo: los posteriores a `01c64d0` solo tocan documentación.
+
+**Cómo se pasa de uno a otro.**
+- *Del commit al pie:* construir la web en ese commit (`npm ci` y `npm run build` en `web/`) escribe «sw.js: versión 60df1e6e47eebcfb». Comprobado el 2026-10-12: sale ese identificador con el `web/` de la etiqueta (`git diff v0.1.1 HEAD -- web` no da nada), y es el que lleva el `sw.js` publicado.
+- *Del pie al commit:* por el número de versión, no por el código: «0.1.1» → etiqueta `v0.1.1` → commit. De una huella no se puede volver atrás; por eso cada versión publicada lleva su etiqueta.
+
+**La confusión es razonable:** siete caracteres hexadecimales entre paréntesis parecen un commit abreviado. No se cambia ahora, porque cambiar el pie es publicar una versión; se decide con la próxima.
