@@ -2,9 +2,26 @@
 
 Motor de estadísticas y estrategia para el **mus**, en su variante más extendida, a 8 reyes (también admite 4 reyes). Calcula con cuánta probabilidad gana cada mano cada lance, cómo conviene descartarse y cuándo merece la pena cortar el mus.
 
-La idea es parecida a la de las calculadoras de póker (Equilab, GTO Wizard), pero para el mus y pensada para jugadores reales. Este repositorio contiene el **motor** en Python, la base de una futura web para el móvil.
+La idea es parecida a la de las calculadoras de póker (Equilab, GTO Wizard), pero para el mus y pensada para jugadores reales. Este repositorio contiene el **motor** en Python y la **web para el móvil** que consulta sus resultados.
 
-> **Estado:** motor terminado en sus tres primeras fases (cálculo exacto de probabilidades, equity por posición y descarte / cortar mus). La web está en preparación.
+**Pruébala: <https://alonsodelaconcha.github.io/mus-analytics/>**
+
+<p>
+  <img src="docs/capturas/mus-o-corto.png" alt="¿Mus o corto?: con R C 5 4 siendo mano, da mus" width="240">
+  <img src="docs/capturas/se-ha-cortado.png" alt="Se ha cortado: señas del compañero y probabilidad de ganar cada lance" width="240">
+  <img src="docs/capturas/ha-habido-mus.png" alt="Ha habido mus: probabilidades con las cartas nuevas" width="240">
+</p>
+
+Mete tus cuatro cartas y tu posición, y te dice si conviene dar mus o cortar, qué descartar y con qué probabilidad ganáis cada lance, contando con las señas de tu compañero. Funciona **sin conexión** si la instalas en el móvil:
+
+- **iPhone:** ábrela en Safari, pulsa Compartir y «Añadir a pantalla de inicio».
+- **Android:** en el menú de Chrome, «Instalar aplicación» o «Añadir a pantalla de inicio».
+
+La primera vez que la abras desde el icono necesita conexión. Cuando el pie de la página diga «Lista para usar sin conexión», ya no hace falta cobertura.
+
+> **Estado:** motor terminado en sus tres primeras fases (cálculo exacto de probabilidades, equity por posición y descarte / cortar mus) y web publicada (versión 0.1). Todas las cifras son en paso, sin envites: ver [Limitaciones](#limitaciones).
+
+**Cómo se ha hecho.** El código lo ha programado [Claude Code](https://claude.com/claude-code), el asistente de Anthropic, bajo mi dirección: yo defino las reglas de mi mesa, reviso los resultados, aporto los datos de las partidas reales y apruebo cada decisión. Todas están en [docs/decisiones.md](docs/decisiones.md), con sus alternativas y los errores encontrados por el camino.
 
 ## Qué calcula
 
@@ -133,9 +150,13 @@ Con 71 manos reales de 15 partidas, hubo mus en el 34 % (IC 95 %: 24-45 %): λ �
 
 Limitaciones: el autor juega en todas las partidas, y las manos de una misma partida no son del todo independientes. Con estos datos, la variación entre partidas es compatible con el azar (p = 0,33) y apenas ensancha el error (×1,06), pero 15 partidas no bastan para descartar una variación moderada.
 
-## Web (en construcción)
+## Web
 
-La web para el móvil está en `web/` (React + TypeScript + Vite). Su núcleo en TypeScript traduce la parte del motor que se calcula en el navegador, y sus tests la comparan con ficheros de referencia exportados por Python, sin ninguna tolerancia. Requiere Node 22 o superior:
+La web para el móvil está en `web/` (React + TypeScript + Vite) y se publica sola en GitHub Pages con cada cambio. No tiene servidor: consulta tablas precalculadas por el motor, y cada fichero se comprueba con su huella SHA-256 antes de usarlo. Su núcleo en TypeScript traduce la parte del motor que se calcula en el navegador, y sus tests la comparan con ficheros de referencia exportados por Python, sin ninguna tolerancia.
+
+**Sin conexión.** Un *service worker* propio guarda la web entera. Cada versión es un conjunto cerrado de ficheros con su huella: se descarga completa o no se instala, y mientras tanto sigue funcionando la anterior, también completa. Cuando hay una versión nueva, la web avisa y no cambia a mitad de una mano. El diseño y la salida de emergencia están en [docs/decisiones.md](docs/decisiones.md).
+
+Requiere Node 22 o superior:
 
 ```bash
 cd web
@@ -147,7 +168,11 @@ npm ci
 npm run verificar
 ```
 
-`npm run dev` la abre en el navegador; `npm run build` la construye en `web/dist`; `npm run movil` la sirve en la red local para probarla en un móvil conectado a la misma Wi-Fi; `npm run capturas` saca capturas a tamaño de móvil con Edge sin ventana y avisa si hay errores en la consola (`web/scripts/capturas.mjs`, sin dependencias). Los datos que consulta los genera `python -m mus exportar-web`.
+`npm run dev` la abre en el navegador; `npm run build` la construye en `web/dist`; `npm run movil` la sirve en la red local para probarla en un móvil conectado a la misma Wi-Fi. Los datos que consulta los genera `python -m mus exportar-web`.
+
+Dos pruebas más usan Edge sin ventana, sin dependencias añadidas:
+- `npm run prueba-sin-conexion` comprueba el modo sin conexión en un navegador de verdad: uso sin red, una versión nueva cuya descarga falla a medias (se queda la anterior entera), la actualización y la salida de emergencia.
+- `npm run capturas` saca capturas a tamaño de móvil y avisa si hay errores en la consola; con `--instalada` simula las zonas seguras del iPhone y falla si algún botón queda debajo.
 
 ## Tests
 
@@ -178,3 +203,7 @@ El primero lanza los tests rápidos (unos segundos). El segundo, las verificacio
 | `analisis.py` | Exportación a CSV y JSON, rankings y gráficas |
 
 La documentación de diseño está en [docs/decisiones.md](docs/decisiones.md): cada decisión importante, sus alternativas y los errores encontrados por el camino.
+
+## Licencia
+
+[AGPL-3.0](LICENSE) · © 2026 Alonso de la Concha Sampedro. Puedes usar, estudiar, modificar y compartir el código, también con fines comerciales, siempre que publiques tus cambios con esta misma licencia; eso incluye a quien ofrezca una versión modificada como servicio web.
