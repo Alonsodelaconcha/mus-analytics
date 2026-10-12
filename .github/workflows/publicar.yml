@@ -1,0 +1,70 @@
+# Publica la web en GitHub Pages. Solo construye la web: los datos ya están
+# versionados en web/public/datos, así que no hace falta Python.
+#
+# Se lanza sola al cambiar algo de web/ en main, y también a mano (pestaña
+# Actions → «Publicar la web» → Run workflow). A mano se puede marcar la salida
+# de emergencia: publica el service worker que borra las cachés de los móviles
+# y se desregistra (ver «Salida de emergencia» en docs/decisiones.md).
+
+name: Publicar la web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/publicar.yml"
+  workflow_dispatch:
+    inputs:
+      emergencia:
+        description: "Salida de emergencia: publicar el service worker que se quita a sí mismo"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Una publicación cada vez, y sin cortar la que esté en marcha.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  construir:
+    name: Construir la web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Tipos, lint y tests
+        run: npm run verificar
+      - name: Construir
+        run: npm run ${{ inputs.emergencia && 'build:emergencia' || 'build' }}
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/dist
+
+  publicar:
+    name: Publicar en GitHub Pages
+    needs: construir
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - id: despliegue
+        uses: actions/deploy-pages@v5
