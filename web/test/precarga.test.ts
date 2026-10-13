@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import {
+  commitDe,
   comprobarDatos,
   crearPrecarga,
   licenciasDeTerceros,
@@ -116,5 +117,24 @@ describe("licencias de terceros", () => {
     expect(texto).toMatch(/^scheduler \d+\.\d+\.\d+ \(MIT\)$/m);
     expect(texto.match(/Permission is hereby granted, free of charge/g)).toHaveLength(2);
     expect(texto).toContain("Copyright (c) Meta Platforms, Inc. and affiliates.");
+  });
+});
+
+describe("el commit del que se construye la web", () => {
+  /** Un git de mentira: responde a cada orden (rev-parse, status) lo que se le diga. */
+  const git = (salidas: Record<string, string>) => (argumentos: string[]) => salidas[argumentos[0] ?? ""] ?? "";
+
+  it("abreviado, y con un «+» si en la carpeta hay cambios sin confirmar", () => {
+    expect(commitDe(".", git({ "rev-parse": "01c64d0\n", status: "" }))).toBe("01c64d0");
+    expect(commitDe(".", git({ "rev-parse": "01c64d0\n", status: " M src/App.tsx\n" }))).toBe("01c64d0+");
+  });
+
+  it("sin git, o si responde otra cosa, no hay commit", () => {
+    expect(commitDe(".", () => { throw new Error("no hay git"); })).toBeNull();
+    expect(commitDe(".", git({ "rev-parse": "fatal: not a git repository" }))).toBeNull();
+  });
+
+  it("en este repositorio da un commit de verdad", () => {
+    expect(commitDe(WEB)).toMatch(/^[0-9a-f]{7,40}\+?$/);
   });
 });

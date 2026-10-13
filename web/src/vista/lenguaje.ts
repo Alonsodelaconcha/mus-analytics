@@ -183,14 +183,26 @@ export function textoSinConexion(estado: EstadoSinConexion): string {
 }
 
 /**
- * "Versión 0.1.0 (a1b2c3d) · datos del 2026-10-07": para saber qué versión hay
- * en el móvil. Entre paréntesis, el identificador de lo guardado para usar sin
- * conexión (cambia con cualquier cambio del código o de los datos).
+ * "Versión 0.2.0 · commit a1b2c3d · huella 60df1e6 · datos del 2026-10-12":
+ * para saber qué versión hay en el móvil. Cada código lleva su nombre, porque
+ * los dos tienen el mismo aspecto y son cosas distintas:
+ *
+ * - el **commit** es el del repositorio del que se construyó la web
+ *   (`null` en desarrollo); con un "+" detrás, había cambios sin confirmar;
+ * - la **huella** identifica lo guardado para usar sin conexión: cambia con
+ *   cualquier cambio del código o de los datos, y solo sale si hay algo guardado.
  */
-export function textoVersion(version: string, estado: EstadoSinConexion, datos: string | null): string {
+export function textoVersion(
+  version: string,
+  estado: EstadoSinConexion,
+  datos: string | null,
+  commit: string | null = null,
+): string {
   const guardada = estado.tipo === "lista" || estado.tipo === "nueva" ? estado.version : null;
   return [
-    `Versión ${version}${guardada === null ? "" : ` (${guardada.slice(0, 7)})`}`,
+    `Versión ${version}`,
+    ...(commit === null ? [] : [`commit ${commit.replace(/\+$/, " y cambios sin confirmar")}`]),
+    ...(guardada === null ? [] : [`huella ${guardada.slice(0, 7)}`]),
     ...(datos === null ? [] : [`datos del ${datos}`]),
   ].join(" · ");
 }

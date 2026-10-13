@@ -9,12 +9,16 @@
  *    comprueba la web al cargarlos);
  * 4. construye `sw.js` con la lista dentro, siempre con ese nombre.
  *
+ * Además define las constantes que enseña el pie de la web: la versión y el
+ * commit del que se construye.
+ *
  * Variables de entorno: `MUS_SW=emergencia` publica el *service worker* de
  * emergencia (`sw/emergencia.ts`) y una web que no registra ninguno;
  * `MUS_VERSION` cambia el número de versión que enseña la web (para las
  * pruebas de actualización, que necesitan dos versiones distintas).
  */
 
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -107,9 +111,33 @@ export function licenciasDeTerceros(carpetas: readonly string[]): string {
   ].join("\n");
 }
 
+/**
+ * Commit del que se construye la web, abreviado, con un "+" detrás si en su
+ * carpeta hay cambios sin confirmar (lo construido no sería entonces lo de ese
+ * commit). `null` si no hay git, como en una copia sin historial.
+ *
+ * Va en el pie de la web junto a la huella de lo guardado: los dos códigos se
+ * parecen, y con su nombre al lado no se confunden.
+ */
+export function commitDe(
+  carpeta: string,
+  git: (argumentos: string[]) => string = (argumentos) =>
+    execFileSync("git", argumentos, { cwd: carpeta, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }),
+): string | null {
+  try {
+    const commit = git(["rev-parse", "--short=7", "HEAD"]).trim();
+    if (!/^[0-9a-f]{7,40}$/.test(commit)) return null;
+    const conCambios = git(["status", "--porcelain", "--", "."]).trim() !== "";
+    return conCambios ? `${commit}+` : commit;
+  } catch {
+    return null;
+  }
+}
+
 export function sinConexion(): Plugin {
   const emergencia = process.env.MUS_SW === "emergencia";
-  const paquete = JSON.parse(readFileSync(resolve(import.meta.dirname, "..", "package.json"), "utf8")) as {
+  const carpetaWeb = resolve(import.meta.dirname, "..");
+  const paquete = JSON.parse(readFileSync(resolve(carpetaWeb, "package.json"), "utf8")) as {
     version: string;
   };
   let config: ResolvedConfig;
@@ -119,6 +147,8 @@ export function sinConexion(): Plugin {
       return {
         define: {
           __VERSION_WEB__: JSON.stringify(process.env.MUS_VERSION ?? paquete.version),
+          // En desarrollo y en los tests no se enseña ningún commit.
+          __COMMIT__: JSON.stringify(command === "build" ? commitDe(carpetaWeb) : null),
           // En desarrollo y en los tests no hay service worker.
           __MODO_SW__: JSON.stringify(command !== "build" ? "ninguno" : emergencia ? "emergencia" : "normal"),
         },

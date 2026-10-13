@@ -371,7 +371,7 @@ describe("versión y modo sin conexión", () => {
     expect(screen.queryByRole("button", { name: "Actualizar" })).toBeNull();
   });
 
-  it("el pie sigue el estado: guardando, lista (con el identificador de lo guardado) y error", async () => {
+  it("el pie sigue el estado: guardando, lista (con la huella de lo guardado) y error", async () => {
     const { sc, poner } = sinConexionFalso({ tipo: "preparando" });
     render(<App cargador={cargador} sinConexion={sc} />);
     await screen.findByText("Mete tus 4 cartas con el teclado de abajo.");
@@ -379,7 +379,7 @@ describe("versión y modo sin conexión", () => {
     expect(within(pie).getByText("Guardando la web para usarla sin conexión…")).toBeDefined();
     poner({ tipo: "lista", version: "abc1234def567890" });
     expect(within(pie).getByText("Lista para usar sin conexión.")).toBeDefined();
-    expect(within(pie).getByText(/^Versión \S+ \(abc1234\) · datos del/)).toBeDefined();
+    expect(within(pie).getByText(/^Versión \S+ · huella abc1234 · datos del/)).toBeDefined();
     poner({ tipo: "error" });
     expect(within(pie).getByText(/^No se ha podido guardar/)).toBeDefined();
   });

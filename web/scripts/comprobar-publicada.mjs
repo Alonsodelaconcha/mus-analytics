@@ -157,7 +157,8 @@ try {
       const nombres = Object.keys(e.guardado);
       afirmar(nombres.length === 1 && nombres[0] === `mus-analytics-${String(version)}` && e.guardado[nombres[0]] === ficheros.length,
         `una caché, la de esta versión, con sus ${String(ficheros.length)} ficheros`, JSON.stringify(e.guardado));
-      afirmar(e.id === String(version).slice(0, 7), `el pie dice: Versión ${String(e.version)} (${String(e.id)})`);
+      afirmar(e.id === String(version).slice(0, 7),
+        `el pie dice: Versión ${String(e.version)} · commit ${String(e.commit)} · huella ${String(e.id)}`);
       if (opciones.version !== undefined) {
         afirmar(e.version === opciones.version, `es la versión ${opciones.version}`, `la publicada es la ${String(e.version)}`);
       }

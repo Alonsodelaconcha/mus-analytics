@@ -107,12 +107,25 @@ describe("versión y modo sin conexión", () => {
     expect(textoSinConexion({ tipo: "no-disponible" })).toBe("Aquí no se puede usar sin conexión.");
   });
 
-  it("la versión, el identificador de lo guardado (si lo hay) y la fecha de los datos", () => {
+  it("la versión, la huella de lo guardado (si lo hay) y la fecha de los datos", () => {
     expect(textoVersion("0.1.0", { tipo: "lista", version: "abc1234def567890" }, "2026-10-07"))
-      .toBe("Versión 0.1.0 (abc1234) · datos del 2026-10-07");
+      .toBe("Versión 0.1.0 · huella abc1234 · datos del 2026-10-07");
     expect(textoVersion("0.1.0", { tipo: "nueva", version: "abc1234def567890" }, "2026-10-07"))
-      .toBe("Versión 0.1.0 (abc1234) · datos del 2026-10-07");
+      .toBe("Versión 0.1.0 · huella abc1234 · datos del 2026-10-07");
     expect(textoVersion("0.1.0", { tipo: "nueva", version: null }, "2026-10-07")).toBe("Versión 0.1.0 · datos del 2026-10-07");
     expect(textoVersion("0.1.0", { tipo: "preparando" }, null)).toBe("Versión 0.1.0");
+  });
+
+  it("el commit y la huella llevan cada uno su nombre: se parecen y no son lo mismo", () => {
+    const lista = { tipo: "lista", version: "60df1e6e47eebcfb" } as const;
+    expect(textoVersion("0.2.0", lista, "2026-10-12", "01c64d0"))
+      .toBe("Versión 0.2.0 · commit 01c64d0 · huella 60df1e6 · datos del 2026-10-12");
+    // Sin nada guardado (red local, desarrollo) no hay huella, pero el commit se sigue viendo.
+    expect(textoVersion("0.2.0", { tipo: "no-disponible" }, "2026-10-12", "01c64d0"))
+      .toBe("Versión 0.2.0 · commit 01c64d0 · datos del 2026-10-12");
+    // Construida con cambios sin confirmar: no es exactamente la de ese commit.
+    expect(textoVersion("0.2.0", lista, null, "01c64d0+"))
+      .toBe("Versión 0.2.0 · commit 01c64d0 y cambios sin confirmar · huella 60df1e6");
+    expect(textoVersion("0.2.0", lista, null, null)).toBe("Versión 0.2.0 · huella 60df1e6");
   });
 });

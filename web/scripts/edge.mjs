@@ -153,7 +153,9 @@ export const ESTADO_PAGINA = `
   return {
     texto,
     version: /Versión (\\S+)/.exec(texto)?.[1] ?? null,
-    id: /Versión \\S+ \\(([0-9a-f]{7})\\)/.exec(texto)?.[1] ?? null,
+    // La huella de lo guardado: «huella 60df1e6» (hasta la 0.1.1 iba entre paréntesis tras la versión).
+    id: (/huella ([0-9a-f]{7})/.exec(texto) ?? /Versión \\S+ \\(([0-9a-f]{7})\\)/.exec(texto))?.[1] ?? null,
+    commit: /commit ([0-9a-f]{7,40})/.exec(texto)?.[1] ?? null,
     controlada: navigator.serviceWorker.controller !== null,
     registros: registros.length,
     esperando: registros.some((r) => r.waiting !== null),

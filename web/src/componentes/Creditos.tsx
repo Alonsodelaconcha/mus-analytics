@@ -10,7 +10,7 @@ const REPOSITORIO = "https://github.com/Alonsodelaconcha/mus-analytics";
 export function Creditos({ guardado, datos }: { guardado: EstadoSinConexion; datos: string | null }) {
   return (
     <footer className="creditos">
-      <p>{textoVersion(__VERSION_WEB__, guardado, datos)}</p>
+      <p>{textoVersion(__VERSION_WEB__, guardado, datos, __COMMIT__)}</p>
       <p>{textoSinConexion(guardado)}</p>
       <p>
         <a href={REPOSITORIO} target="_blank" rel="noreferrer">Código fuente</a>

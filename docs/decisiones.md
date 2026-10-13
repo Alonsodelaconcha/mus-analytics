@@ -955,3 +955,15 @@ Queda dentro de los dos límites, así que se hizo sin preguntar. El margen de e
 - **Límite conocido.** El almacenamiento del navegador admite unos 5 MB, que dan para más de 10 000 respuestas (estimación: unos 190 caracteres por respuesta). Si un día no deja guardar, el entrenador lo dice y sigue. Si se queda corto, la alternativa es IndexedDB.
 
 **Alternativa descartada:** guardar solo totales (respuestas y tantos perdidos). Ocupa menos, pero no permite el repaso de fallos ni sirve como conjunto de datos.
+
+## 2026-10-13 · El pie de la web: versión, commit y huella
+
+El pie decía «Versión 0.1.1 (60df1e6)», y ese código parecía un commit sin serlo (ver «Los dos códigos de una versión»). Ahora cada código lleva su nombre, con el formato que propuso el usuario: **«Versión 0.2.0 · commit 01c64d0 · huella 60df1e6 · datos del 2026-10-12»** (es un ejemplo del formato: la 0.2.0 no está publicada todavía).
+
+- **El commit** lo pone el plugin al construir (`commitDe`, con `git rev-parse`). Si en `web/` hay cambios sin confirmar, el pie lo dice («commit b11d3dd y cambios sin confirmar»): lo construido no es entonces lo de ese commit. En desarrollo, en los tests o sin git, no sale.
+- **La huella** sigue siendo la de la lista de ficheros publicados, y solo sale si hay algo guardado para usar sin conexión.
+- Con esto, la etiqueta de cada versión publicada se puede cotejar a simple vista: el commit del pie es el de la etiqueta.
+
+**Lo que se pierde.** Antes, dos commits con la misma web daban la misma huella. Ahora el commit va dentro del código publicado, así que la huella cambia con cada commit del que se construya. No afecta a la publicación normal, que solo se lanza cuando cambia `web/`; si se relanza a mano desde un commit que solo toca documentación, los móviles verán una versión nueva sin cambios.
+
+Los scripts que leen el pie (`prueba-sin-conexion`, `comprobar-publicada`) entienden los dos formatos: el anterior hace falta para comprobar el paso de la 0.1.1 publicada a la siguiente.
