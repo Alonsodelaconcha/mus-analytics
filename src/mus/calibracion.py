@@ -22,6 +22,9 @@ Limitaciones:
   :func:`variacion_entre_partidas` mide si la frecuencia de mus varía entre
   partidas más de lo que daría el azar y cuánto se ensancharía el error.
 - El usuario juega todas las partidas: sus decisiones pesan en los datos.
+- Las partidas son online, en la aplicación Mus Maestro: los otros tres
+  jugadores son los que tocan allí. La calibración describe a esa población,
+  que no tiene por qué cortar como una mesa presencial.
 
 Una comprobación más fina, que no se usa para ajustar nada:
 ``datos/cortes_por_posicion.csv`` (generado igual) dice cuántas veces le tocó

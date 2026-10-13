@@ -1,6 +1,10 @@
 """Anotaciones de partidas reales, mano a mano (``datos/manos_reales.csv``).
 
-Es la fuente de los datos reales. El usuario apunta cada mano de sus partidas:
+Es la fuente de los datos reales. El usuario apunta cada mano de sus partidas,
+que son online, en la aplicación Mus Maestro: los otros tres jugadores son los
+que le tocan allí en cada partida, no un grupo fijo. Las señas son emojis que
+ven los cuatro durante un segundo, y cuando un jugador se va lo sustituye un
+bot. De cada mano se apunta:
 
 - ``partida`` y ``numero`` (de mano dentro de la partida, desde 1);
 - ``rondas``: la secuencia de rondas de mus separadas por espacios. Cada ronda
@@ -20,9 +24,14 @@ que la calibración no usa pero la Fase 6 necesitará.
 Criterios (del usuario):
 
 - Se excluye la primera mano de cada partida. Se juega con mus corrido y sin
-  señas, y quien corta pasa a ser mano: así se decide la mano de la partida.
-  En esas manos, la posición de ``rondas`` es la que anotó el usuario.
+  señas, y quien corta pasa a ser mano: así se decide la mano de la partida
+  (es la regla tradicional, la del reglamento de Fournier). En esas manos, la
+  posición de ``rondas`` es la que anotó el usuario.
 - Se excluyen las manos que no se recuerdan.
+- Se excluyen las manos jugadas con un bot: lo que se mide es cómo juegan las
+  personas. El usuario apunta «bot desde la mano X»; si no se sabe desde
+  cuándo, se excluye la partida entera, que se queda en el fichero con su
+  motivo.
 - Para las estadísticas solo cuenta la primera ronda.
 """
 
