@@ -106,12 +106,20 @@ export interface VistaOpcion {
   readonly resumen: ResumenDistribucion;
 }
 
+/**
+ * Un descarte que no es el mejor es "casi igual" si su diferencia con él está
+ * dentro del margen de error o es menor que `UMBRAL_DESCARTE`. Es la regla con
+ * que el entrenador da por buena una respuesta.
+ */
+export function esCasiIgual(valor: ValorOpcion): boolean {
+  return Math.abs(valor.diferencia) <= valor.radio || Math.abs(valor.diferencia) < UMBRAL_DESCARTE;
+}
+
 export function vistaDescartes(valores: readonly ValorOpcion[], mano: Conteos): VistaOpcion[] {
   return valores.map((valor, i) => {
     const texto = textoOpcion(valor.opcion);
     const distribucion = distribucionTrasDescarte(mano, valor.opcion);
-    const casiIgual = i > 0 &&
-      (Math.abs(valor.diferencia) <= valor.radio || Math.abs(valor.diferencia) < UMBRAL_DESCARTE);
+    const casiIgual = i > 0 && esCasiIgual(valor);
     const comparacion = i === 0
       ? "La mejor"
       : casiIgual

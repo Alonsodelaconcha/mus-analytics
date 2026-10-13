@@ -936,3 +936,22 @@ Queda dentro de los dos límites, así que se hizo sin preguntar. El margen de e
 - *Un fichero aparte para el entrenador, sin subir el formato.* Los ficheros existentes habrían quedado byte a byte iguales. Se descartó porque el desglose es una propiedad de la decisión y también le sirve a la calculadora; la comprobación de que nada cambia se hizo comparando campo a campo.
 - *`p_habla` exacta en vez de simulada.* De postre exige recorrer las manos de tres jugadores para cada una de las 330. La simulada tiene un error típico menor de 0,002 y solo se usa para sortear.
 - *Usar el λ de la mesa también para la propia mano.* Supondría que en la mesa Normal se da mus con R R C S el 37 % de las veces.
+
+## 2026-10-13 · Fase 5, paso 2: el núcleo del entrenador en la web
+
+`web/src/entrenador/`: tres módulos sin interfaz, con sus tests.
+
+**Valoración (`valoracion.ts`): una sola regla, la de la calculadora.** «¿Mus o corto?» se valora con `vistaDecision`, y los descartes con `esCasiIgual`, que se ha sacado de `vistaDescartes` para usarla en los dos sitios. El entrenador no tiene umbrales propios para decidir quién acierta: si un día cambian los de la calculadora, cambian los suyos.
+
+**Comparación con Python, sin tolerancia.** Los tantos perdidos van en milésimas (enteros). Los tests comparan con `entrenador.json`, en las tres mesas: veredicto, intensidad y tantos perdidos de las 3 960 decisiones; tantos perdidos, opciones que valen y mejor opción de los 42 552 descartes; el peso de cada situación en los dos ejercicios y los dos modos; y los umbrales.
+
+**Sorteo (`situaciones.ts`).** Una serie no repite situación. El azar llega por parámetro: en la web es `Math.random` y cada serie es distinta; solo los tests usan una semilla (cambio E). Un test sortea 40 000 veces y compara la frecuencia de cada posición con la que le toca por su peso.
+
+**Progreso (`progreso.ts`, cambio D).**
+- Es un registro de respuestas en el almacenamiento del navegador. Cada anotación va completa: fecha, ejercicio, modo, mesa, la mano escrita, posición, respuesta, la mejor, lo clara que era, tantos perdidos, fecha de los datos y versión de la web. No lleva ningún dato de quién responde: es el formato que algún día se podría recoger de forma anónima. Las cifras se calculan del registro; no se guarda ninguna aparte.
+- **Exportar e importar.** Importar une el fichero con lo que hay, sin repetir: importar dos veces el mismo no cambia nada. Un fichero que no se entiende (no es de progreso, es de otra versión o tiene una respuesta dañada) no toca nada y dice por qué.
+- **Un registro guardado que no se entiende no se pisa:** se aparta con otra clave antes de empezar uno nuevo.
+- **Almacenamiento persistente.** Se pide con `navigator.storage.persist()` si existe. Solo existe en contextos seguros: por la red local no está, y el progreso se guarda igual.
+- **Límite conocido.** El almacenamiento del navegador admite unos 5 MB, que dan para más de 10 000 respuestas (estimación: unos 190 caracteres por respuesta). Si un día no deja guardar, el entrenador lo dice y sigue. Si se queda corto, la alternativa es IndexedDB.
+
+**Alternativa descartada:** guardar solo totales (respuestas y tantos perdidos). Ocupa menos, pero no permite el repaso de fallos ni sirve como conjunto de datos.
