@@ -115,9 +115,16 @@ h1, h2, h3 {
 
 .cabecera {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0 0.4rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.4rem;
+}
+
+.cabecera__titulo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .cabecera h1 {
@@ -127,6 +134,24 @@ h1, h2, h3 {
 
 .cabecera__variante {
   color: var(--suave);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+/* El modo (calculadora o entrenador), a la derecha del título. */
+.segmentado--cabecera {
+  margin-top: 0;
+  flex: none;
+}
+
+.segmentado--cabecera .segmentado__opciones {
+  gap: 0.2rem;
+  padding: 0.2rem;
+}
+
+.segmentado--cabecera .segmentado__opcion {
+  min-height: 2.6rem;
+  padding: 0.2rem 0.6rem;
   font-size: 0.85rem;
 }
 
@@ -952,4 +977,272 @@ h1, h2, h3 {
 .creditos a {
   color: inherit;
   text-underline-offset: 3px;
+}
+
+/* --- Entrenador ------------------------------------------------------------------------ */
+
+/* Abajo solo van los botones de respuesta (o «Siguiente»): sin teclado ni pestañas. */
+.app[data-pie="entrenador"] {
+  padding-bottom: calc(var(--acciones-alto) + 1rem + env(safe-area-inset-bottom));
+}
+
+.pie__acciones--entrenador {
+  gap: 0.5rem;
+}
+
+/* Los colores de la calculadora: cortar en rojo y dar mus en verde. */
+.boton--corta {
+  background: var(--corta);
+}
+
+.boton--mus {
+  background: var(--mus);
+}
+
+.entrenador__entrada {
+  margin: 0 0 0.6rem;
+}
+
+.situacion__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.situacion__cabecera .bloque__titulo {
+  margin-bottom: 0;
+}
+
+.situacion__salir {
+  min-height: 0;
+  padding: 0.2rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.situacion__cartas {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.8rem 0 0.6rem;
+}
+
+.situacion[data-respondida] .situacion__cartas {
+  gap: 0.35rem;
+  margin: 0.5rem 0 0.4rem;
+}
+
+.situacion__jugada {
+  text-align: center;
+  font-weight: 700;
+  margin: 0;
+}
+
+.situacion__posicion {
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0.5rem 0 0;
+  text-wrap: balance;
+}
+
+.situacion__contexto,
+.entrenador__contexto,
+.valoracion__contexto {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+}
+
+.situacion__contexto {
+  text-align: center;
+  text-wrap: balance;
+}
+
+.valoracion {
+  border-width: 2px;
+}
+
+.valoracion[data-resultado="bien"] {
+  border-color: var(--mus);
+}
+
+.valoracion[data-resultado="fallo"] {
+  border-color: var(--corta);
+}
+
+.valoracion[data-resultado="igual"] {
+  border-color: var(--igual);
+}
+
+.valoracion__respuesta {
+  margin: 0;
+  color: var(--suave);
+  font-size: 0.85rem;
+}
+
+.valoracion__titulo {
+  font-size: 1.7rem;
+  font-weight: 800;
+  margin: 0.1rem 0 0.3rem;
+}
+
+.valoracion[data-resultado="bien"] .valoracion__titulo {
+  color: var(--mus);
+}
+
+.valoracion[data-resultado="fallo"] .valoracion__titulo {
+  color: var(--corta);
+}
+
+.valoracion[data-resultado="igual"] .valoracion__titulo {
+  color: var(--igual);
+}
+
+.valoracion__detalle {
+  margin: 0 0 0.4rem;
+}
+
+/* El porqué, lance a lance: una barra desde el centro, a la derecha si con el mus se
+   gana y a la izquierda si se pierde. */
+.por-lance {
+  margin: 0.7rem 0 0.3rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--borde);
+}
+
+.por-lance__titulo {
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.por-lance__frase {
+  margin: 0 0 0.5rem;
+  font-size: 0.93rem;
+}
+
+.por-lance__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.por-lance__fila {
+  display: grid;
+  grid-template-columns: 3.6rem 1fr 3.4rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.por-lance__nombre {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.por-lance__barra {
+  position: relative;
+  height: 0.9rem;
+  border-radius: 4px;
+  background: var(--barra-fondo);
+}
+
+/* La raya del cero. */
+.por-lance__barra::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--suave);
+}
+
+.por-lance__relleno {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-radius: 0 4px 4px 0;
+  background: var(--mus);
+}
+
+.por-lance__fila[data-efecto="pierde"] .por-lance__relleno {
+  left: auto;
+  right: 50%;
+  border-radius: 4px 0 0 4px;
+  background: var(--corta);
+}
+
+.por-lance__cifra {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.por-lance__fila[data-efecto="gana"] .por-lance__cifra {
+  color: var(--mus);
+}
+
+.por-lance__fila[data-efecto="pierde"] .por-lance__cifra {
+  color: var(--corta);
+}
+
+.por-lance__fila[data-efecto="igual"] .por-lance__cifra {
+  color: var(--suave);
+  font-weight: 600;
+}
+
+.por-lance__nota {
+  font-size: 0.8rem;
+  margin: 0.4rem 0 0;
+}
+
+.resumen__total {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.resumen__ritmo {
+  font-weight: 600;
+  margin: 0.3rem 0;
+}
+
+.resumen__lista {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+}
+
+.resumen__fila {
+  display: grid;
+  grid-template-columns: 5.2rem 1fr auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--borde);
+  font-size: 0.93rem;
+}
+
+.resumen__mano {
+  font-weight: 700;
+}
+
+.resumen__posicion {
+  color: var(--suave);
+}
+
+.resumen__resultado {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.resumen__fila[data-resultado="bien"] .resumen__resultado {
+  color: var(--mus);
+}
+
+.resumen__fila[data-resultado="fallo"] .resumen__resultado {
+  color: var(--corta);
 }

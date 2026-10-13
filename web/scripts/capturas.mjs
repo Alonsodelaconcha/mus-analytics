@@ -103,6 +103,10 @@ try {
     for (const escena of escenas) {
       const nombre = [escena.nombre, ...(opciones.instalada ? ["instalada"] : []), ...(temas.length > 1 ? [tema] : [])].join("-");
       edge.errores.length = 0;
+      // Cada escena empieza sin nada recordado (el modo, el tipo de mesa, el progreso del
+      // entrenador). Se borra antes de cargar la página: borrarlo desde dentro llega tarde
+      // si la web ya ha leído sus preferencias.
+      await edge.cdp("Storage.clearDataForOrigin", { origin: new URL(opciones.url).origin, storageTypes: "local_storage" });
       await edge.cdp("Page.navigate", { url: opciones.url });
       let datos;
       try {

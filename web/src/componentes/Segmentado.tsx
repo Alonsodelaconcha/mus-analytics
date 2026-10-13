@@ -13,6 +13,7 @@ export function Segmentado<T extends string | number>({
   onCambio,
   pequeno = false,
   etiquetaOculta = false,
+  clase = "",
 }: {
   etiqueta: string;
   opciones: readonly OpcionSegmentada<T>[];
@@ -21,10 +22,12 @@ export function Segmentado<T extends string | number>({
   pequeno?: boolean;
   /** La etiqueta solo para lectores de pantalla (cuando las opciones ya se explican solas). */
   etiquetaOculta?: boolean;
+  /** Clases de más, para una variante de aspecto. */
+  clase?: string;
 }) {
   const id = useId();
   return (
-    <div className={`segmentado${pequeno ? " segmentado--pequeno" : ""}`} role="group"
+    <div className={`segmentado${pequeno ? " segmentado--pequeno" : ""}${clase === "" ? "" : ` ${clase}`}`} role="group"
       aria-labelledby={id}>
       <span className={etiquetaOculta ? "solo-lector" : "segmentado__etiqueta"} id={id}>{etiqueta}</span>
       <div className="segmentado__opciones">

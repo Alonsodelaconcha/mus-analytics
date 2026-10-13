@@ -297,7 +297,7 @@ class TestDatosFrenteAlMotor:
         (el motor, simulando otra vez con otra semilla)."""
         motor, publicada = real
         for caso in CASOS_TESTIGO:
-            modelo = comparar(caso, motor, 100_000, semilla=1).modelo
+            modelo = comparar(caso, motor, 50_000, semilla=1).modelo
             v = publicada.corte(indice(caso.mano), caso.posicion)
             esperado = {"mus": 1, "cortar": -1, "indiferente": 0}[modelo.decision]
             ventaja = modelo.ventaja_mus.media

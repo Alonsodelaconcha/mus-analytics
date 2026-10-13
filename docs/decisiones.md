@@ -967,3 +967,34 @@ El pie decía «Versión 0.1.1 (60df1e6)», y ese código parecía un commit sin
 **Lo que se pierde.** Antes, dos commits con la misma web daban la misma huella. Ahora el commit va dentro del código publicado, así que la huella cambia con cada commit del que se construya. No afecta a la publicación normal, que solo se lanza cuando cambia `web/`; si se relanza a mano desde un commit que solo toca documentación, los móviles verán una versión nueva sin cambios.
 
 Los scripts que leen el pie (`prueba-sin-conexion`, `comprobar-publicada`) entienden los dos formatos: el anterior hace falta para comprobar el paso de la 0.1.1 publicada a la siguiente.
+
+## 2026-10-13 · Fase 5, paso 3: el entrenador de «¿Mus o corto?» en pantalla
+
+**Dos modos en la cabecera: «Calculadora | Entrenador».** La web abre en el último que se usó (la primera vez, en la calculadora). Al cambiar de modo sigue todo como estaba: la mano que se estaba metiendo, la serie del entrenador, el tipo de mesa (el mismo en los dos) y el registro de respuestas. Para eso `App` se ha partido en tres: `App.tsx` (lo común), `Calculadora.tsx` (lo que había, sin cambiar lo que hace) y `Entrenador.tsx`.
+
+**Una serie son 10 manos.** Inicio (tipo de mesa, qué manos salen y el progreso), pregunta, valoración, y al final el resumen. Las reglas están en un *reducer* puro (`entrenador/serie.ts`), como las de la calculadora.
+
+**La situación dice lo que hay que saber antes de responder** (cambios A y B):
+- quién eres y qué han hecho los anteriores: «Eres postre. Los tres anteriores han dado mus.»;
+- contra qué se compara: «La mejor jugada contra una mesa «Normal», sin contar envites, señas ni las cartas que piden los demás.» En ningún sitio se habla de jugada perfecta ni de equilibrio.
+
+**La valoración** dice «Bien», «Daba igual» o «Era mejor cortar» (o «dar mus»), y lo que se pierde como lo notaría un jugador: «Pierdes unos 4 tantos cada 10 manos». En las decisiones «por poco» añade que con envites o según el marcador podría cambiar.
+
+**El porqué, lance a lance (cambio C).** Cinco barras: a la derecha, lo que se gana por dar mus en ese lance; a la izquierda, lo que se pierde. Un lance sale como «≈ 0» si su cifra está dentro del margen de error o no llega a 0,02 tantos. Encima, una frase con el que más pesa: «Lo que más pesa son los pares: dando mus pierdes ahí unos 1,3 tantos por mano» (7 7 4 4 de mano).
+
+**El resumen** da los tantos perdidos en la serie y, solo en «Como en la mesa», el ritmo por cada 100 manos de partida. Debajo, el progreso acumulado en esa mesa. En «Ajustadas» no se da el ritmo: las manos no salen como en una partida.
+
+**Que quepa en el móvil.** Tras responder, las cartas se encogen y el «contra qué se compara» pasa al bloque de la valoración. Así, con la web instalada en un iPhone 15, el veredicto y los lances caben casi siempre sin desplazar; en los «Daba igual», que llevan más texto, el último lance queda bajo el botón.
+
+**Comprobaciones:**
+- *Tests del flujo con los datos reales:* una serie entera en la que lo que sale en pantalla para cada mano se compara con lo que dicen los datos; las diez respuestas quedan anotadas, completas y en orden.
+- *Fallos puestos a propósito:* 15 (tantos perdidos cambiados de respuesta, pesos sin la probabilidad de hablar, series que repiten mano, desglose desplazado un lance, respuestas que no se guardan...). Los tests detectaron 14.
+- *El que no detectaron era código que sobraba.* Había una protección contra dos toques seguidos en «Mus», y quitarla no rompía nada: tras el primer toque React vuelve a pintar antes de atender el segundo, y el botón ya no está. Se quitó la protección y se dejó el test.
+- *Capturas* a 393 × 852 en claro y en oscuro, como web instalada (zonas seguras) y por la IP de la red local, sin errores en la consola. El modo sin conexión, 58 comprobaciones.
+
+**Error encontrado en el script de capturas.** Cada escena borraba lo recordado desde dentro de la página, cuando la web ya había leído sus preferencias. Con el modo recordado, la escena siguiente abría en el entrenador y el script, que espera las pestañas de la calculadora, agotaba el tiempo. Solo fallaba por la IP de red, y en una escena sí y otra no. Ahora se borra antes de cargar la página. *Lección:* lo que se recuerda entre visitas también hay que ponerlo a cero entre pruebas, y antes de que la página arranque.
+
+**Lo que no está hecho:**
+- Probarlo en el iPhone del usuario: es la parada de este paso.
+- El ejercicio de descarte, la pantalla de progreso con «Exportar» e «Importar» y el repaso de fallos (paso 4). El núcleo ya los tiene; falta la interfaz.
+- La versión sigue siendo la 0.1.1 hasta la publicación. Nada de esto está en `main`.

@@ -31,8 +31,13 @@ export function Limitaciones({ manifiesto }: { manifiesto: Manifiesto | null }) 
             mus (unos 4 tantos más cada 10 manos).
           </li>
           <li>
+            <strong>No se cuentan las cartas que piden los demás.</strong> Cuántas pide cada uno
+            dice algo de lo que lleva, y estas cifras no lo usan.
+          </li>
+          <li>
             <strong>Tipo de mesa.</strong> Las decisiones dudosas dependen de cuánto se corte en tu
-            mesa: elige el tipo que más se parezca.
+            mesa: elige el tipo que más se parezca. El entrenador da por buena la mejor jugada
+            contra ese tipo de mesa, no una jugada perfecta contra cualquiera.
           </li>
           <li>
             <strong>Exactas y simuladas.</strong> Las probabilidades de «Se ha cortado» son exactas.

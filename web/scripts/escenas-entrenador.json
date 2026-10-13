@@ -1,0 +1,6 @@
+[
+  { "nombre": "e1-entrenador-inicio", "pasos": "await toca(\"Entrenador\"); await calculada();" },
+  { "nombre": "e2-entrenador-pregunta", "pasos": "await toca(\"Entrenador\"); await calculada(); await toca(\"Empezar: 10 manos\");" },
+  { "nombre": "e3-entrenador-valoracion", "pasos": "await toca(\"Entrenador\"); await calculada(); await toca(\"Empezar: 10 manos\"); await toca(\"Mus\");" },
+  { "nombre": "e4-entrenador-resumen", "pasos": "await toca(\"Entrenador\"); await calculada(); await toca(\"Empezar: 10 manos\"); for (let i = 1; i <= 10; i++) { await toca(i % 3 === 0 ? \"Mus\" : \"Corto\"); await toca(i === 10 ? \"Ver el resumen\" : \"Siguiente\"); }" }
+]
