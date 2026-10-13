@@ -307,6 +307,57 @@ class ComparacionCortes:
         return razon, (razon * exp(-z * error), razon * exp(z * error)), modelo_postre / modelo_mano
 
 
+@dataclass(frozen=True)
+class ContrastePareja:
+    """¿Se reparte el corte dentro de la pareja segundo-postre como dice el modelo?
+
+    Atributos:
+        diferencia: (corte observado del postre − el del modelo) − (lo mismo para
+            el segundo), en proporción. Positiva si, respecto al modelo, el
+            postre corta de más y el segundo de menos.
+        p_valor: proporción de sesiones simuladas con el modelo, con las mismas
+            manos, cuya diferencia es tan grande o más en valor absoluto.
+    """
+
+    diferencia: float
+    p_valor: Estimacion
+
+
+def contraste_segundo_postre(observado: CortesPorPosicion, modelo: Sequence[float],
+                             simulaciones: int = 200_000, semilla: int = 1) -> ContrastePareja:
+    """Contrasta si el segundo corta de menos y el postre de más (o al revés)
+    respecto al modelo, que por parejas puede encajar aunque dentro de la pareja no.
+
+    Sirve para una hipótesis concreta: que el segundo dé mus para que decida su
+    compañero, el postre, que habla el último. El modelo no tiene esa
+    coordinación. Con el modelo, quién corta primero en cada mano es una
+    multinomial (cada posición corta con su probabilidad si le llega el turno), y
+    las manos se suponen independientes, como en el resto de la calibración.
+    """
+    q = tuple(modelo)
+    if len(q) != 4 or not all(0 < x < 1 for x in q):
+        raise ValueError("El modelo debe dar una probabilidad de corte en (0, 1) por posición")
+    if observado.habla[1] == 0 or observado.habla[3] == 0:
+        raise ValueError("Hace falta que el segundo y el postre hayan hablado alguna vez")
+
+    def diferencia(habla2, corta2, habla4, corta4):
+        return (corta4 / habla4 - q[3]) - (corta2 / habla2 - q[1])
+
+    d = float(diferencia(observado.habla[1], observado.corta[1],
+                         observado.habla[3], observado.corta[3]))
+    # Probabilidad de que el primero en cortar sea cada posición, o de que haya mus.
+    llega = np.cumprod([1.0, *(1 - x for x in q)])
+    probabilidades = [*(llega[p] * q[p] for p in range(4)), llega[4]]
+    manos = observado.habla[0]
+    cuentas = np.random.default_rng(semilla).multinomial(manos, probabilidades, size=simulaciones)
+    habla2 = manos - cuentas[:, 0]
+    habla4 = habla2 - cuentas[:, 1] - cuentas[:, 2]
+    validas = (habla2 > 0) & (habla4 > 0)
+    simuladas = diferencia(habla2[validas], cuentas[validas, 1], habla4[validas], cuentas[validas, 3])
+    extremas = int((np.abs(simuladas) >= abs(d) - 1e-12).sum())
+    return ContrastePareja(d, Estimacion(extremas, int(validas.sum())))
+
+
 def cortes_del_modelo(reglas: ReglasMus = REGLAS_POR_DEFECTO, factor_corte: float = 1.0
                       ) -> tuple[float, ...]:
     """P(corta | le toca hablar) de cada posición en la mesa de rivales razonables ×λ."""

@@ -9,6 +9,7 @@ from mus.calibracion import (
     calibrar,
     cola_chi2,
     comparar_cortes,
+    contraste_segundo_postre,
     lambda_para,
     leer_cortes,
     leer_observaciones,
@@ -145,3 +146,69 @@ def test_cli_con_cortes(monkeypatch, capsys, tmp_path):
     salida = capsys.readouterr().out
     assert "los datos encajan con el modelo" in salida and "1.79 veces más" in salida
     assert "La mesa «Normal» de la web usa λ = 0.67" in salida and "AVISO" not in salida
+
+
+# --- Dentro de la pareja segundo-postre ------------------------------------------------------
+
+MODELO = (0.2123, 0.3278, 0.1826, 0.3049)        # mesa «Normal»
+
+
+def test_contraste_segundo_postre():
+    # Como el modelo: sin diferencia.
+    igual = contraste_segundo_postre(CortesPorPosicion((1000, 788, 530, 433), (212, 258, 97, 132)),
+                                     MODELO, simulaciones=20_000)
+    assert abs(igual.diferencia) < 0.005 and igual.p_valor.p > 0.8
+    # El segundo no corta nunca y el postre casi siempre: imposible con el modelo.
+    extremo = contraste_segundo_postre(CortesPorPosicion((100, 80, 80, 60), (20, 0, 20, 55)),
+                                       MODELO, simulaciones=20_000)
+    assert extremo.diferencia > 0.9 and extremo.p_valor.p < 0.001
+    # Al revés, la diferencia es negativa y el contraste, igual de bilateral.
+    alreves = contraste_segundo_postre(CortesPorPosicion((100, 80, 20, 10), (20, 60, 10, 0)),
+                                       MODELO, simulaciones=20_000)
+    assert alreves.diferencia < -0.7 and alreves.p_valor.p < 0.001
+    # Reproducible con la semilla.
+    assert contraste_segundo_postre(REALES, MODELO, 20_000) == contraste_segundo_postre(REALES, MODELO, 20_000)
+    with pytest.raises(ValueError):
+        contraste_segundo_postre(CortesPorPosicion((10, 0, 0, 0), (10, 0, 0, 0)), MODELO)
+    with pytest.raises(ValueError):
+        contraste_segundo_postre(REALES, (0.2, 0.3, 0.2))
+
+
+def test_contraste_con_los_datos_del_2026_10_13():
+    """Las 112 manos: el postre corta de más y el segundo de menos (+20 puntos frente al
+    modelo), pero el efecto sale de la sesión del 12 de octubre."""
+    todas = contraste_segundo_postre(CortesPorPosicion((112, 89, 68, 56), (23, 21, 12, 23)), MODELO)
+    assert todas.diferencia == pytest.approx(0.198, abs=0.001) and 0.01 < todas.p_valor.p < 0.03
+    antes = contraste_segundo_postre(CortesPorPosicion((71, 57, 42, 34), (14, 15, 8, 10)), MODELO)
+    assert antes.diferencia == pytest.approx(0.054, abs=0.001) and antes.p_valor.p > 0.5
+    sesion = contraste_segundo_postre(CortesPorPosicion((41, 32, 26, 22), (9, 6, 4, 13)), MODELO)
+    assert sesion.diferencia == pytest.approx(0.426, abs=0.001) and sesion.p_valor.p < 0.005
+
+
+def test_cli_con_las_anotaciones(monkeypatch, capsys, tmp_path):
+    """Con los ficheros por defecto, calibrar usa también las anotaciones mano a mano:
+    la pareja segundo-postre por sesiones y el corte sin las decisiones del usuario."""
+    import mus.__main__ as cli
+    from mus.manos_reales import COLUMNAS, escribir_resumenes
+    monkeypatch.setattr(cli, "curva_hay_mus", lambda reglas: CURVA)
+    monkeypatch.setattr(cli, "cortes_del_modelo", lambda reglas, lam: MODELO)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "datos").mkdir()
+    filas = [",".join(COLUMNAS)]
+    for partida, fecha, posicion in ((1, "", ""), (2, "2026-10-12", "segundo")):
+        filas.append(f"{partida},{fecha},,1,mano,sí,primera mano,,,")
+        for numero, rondas in enumerate(("mano", "segundo", "postre", "mus tercero", "postre"), start=2):
+            filas.append(f"{partida},{fecha},,{numero},{rondas},no,,{posicion},,")
+    (tmp_path / "datos" / "manos_reales.csv").write_text("\n".join(filas) + "\n", encoding="utf-8")
+    escribir_resumenes("datos/manos_reales.csv", "datos/mus_real.csv", "datos/cortes_por_posicion.csv")
+    assert main(["calibrar"]) == 0
+    salida = capsys.readouterr().out
+    assert "Dentro de la pareja segundo-postre" in salida
+    lineas = {linea.split()[0]: linea for linea in salida.splitlines() if linea.startswith("  ")}
+    assert "1/4 = 25 %" in lineas["sin"] and "2/3 = 67 %" in lineas["sin"]      # «sin fecha»
+    assert "2026-10-12" in lineas and "todas" in lineas and "2/8 = 25 %" in lineas["todas"]
+    assert "Corte por posición según de quién es la decisión (5 manos con tu posición anotada)" in salida
+    # De segundo: hablé 4 veces (las que la mano dio mus) y corté 1.
+    assert "1/4 = 25 %" in lineas["segundo"]
+    # Los demás: la mano habló 5 veces y cortó 1; el tercero, 3 y 0; el postre, 3 y 2.
+    assert "En total: tú cortas 1/4 = 25 % de las veces que te toca hablar; los demás, 3/11 = 27 %." in salida
