@@ -93,6 +93,13 @@ Los pesos salen de tres cifras por mano y posición, todas de la simulación con
 
 **«¿Mus o corto?»:** peso = frecuencia de la mano × `p_habla`. La posición sale de ese mismo sorteo, así que de mano se decide más veces que de postre, como en la mesa.
 
-**«¿Qué tiras?»:** peso = frecuencia de la mano × `p_habla` × `p_mus_despues`, y solo si el entrenador no recomienda cortar con ella. Motivo: quien se entrena es el que decide con esa mano, y el modelo le supone la mejor respuesta; el λ de la mesa describe cuánto cortan **los demás**. Con R R C S el entrenador corta siempre, así que en este modo no sale nunca. Usar el λ también para la propia mano supondría que en la mesa Normal se da mus con R R C S el 37 % de las veces, que es justo lo que se quiere evitar. *Pendiente de confirmar con el usuario antes del paso 4, que es donde se usa.*
+**«¿Qué tiras?»:** peso = frecuencia de la mano × `p_habla` × `p_mus_despues`, y solo si el entrenador no recomienda cortar con ella. Motivo: quien se entrena es el que decide con esa mano, y el modelo le supone la mejor respuesta; el λ de la mesa describe cuánto cortan **los demás**. Con R R C S el entrenador corta siempre, así que en este modo no sale nunca. Usar el λ también para la propia mano supondría que en la mesa Normal se da mus con R R C S el 37 % de las veces, que es justo lo que se quiere evitar. **Confirmado por el usuario (2026-10-13):** vale «nunca». Son las situaciones a las que llega quien decide bien el mus o corto. En «Ajustadas» y «Repaso de mis fallos» puede salir cualquier mano.
 
 **Tantos por cada 100 manos de partida.** No en todas las manos te toca hablar: el resumen multiplica lo perdido por decisión por la fracción de manos en que se decide en esa mesa (la media de `p_habla`). Solo en «Como en la mesa»; en los otros modos el sorteo no es el de la mesa y esa cifra no se da.
+
+## Respuestas del usuario antes del paso 4 (2026-10-13)
+
+1. **Descartes «como en la mesa»:** vale «nunca» con las manos que se cortan (ver «Cómo se concreta el cambio A»).
+2. **La rama `entrenador` está en GitHub** (no lanza ningún flujo: ni los tests ni la publicación).
+3. **En el paso 4, arreglar los «Daba igual»:** con la web instalada, el último lance no debe quedar bajo el botón.
+4. **No empezar el paso 4** hasta que pase sus comentarios tras probar el entrenador en el móvil.

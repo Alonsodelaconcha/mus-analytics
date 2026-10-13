@@ -920,7 +920,7 @@ Queda dentro de los dos límites, así que se hizo sin preguntar. El margen de e
 
 **Situaciones «como en la mesa» (cambio A).** Los pesos son productos de enteros, exactos también en JavaScript:
 - «¿Mus o corto?»: combinaciones de la mano × `p_habla`. En la mesa Normal salen de mano el 36 % de las veces, de segundo el 29 %, de tercero el 19 % y de postre el 16 %.
-- «¿Qué tiras?»: combinaciones × `p_habla` × probabilidad de que den mus los de después, y **solo si el entrenador no corta con esa mano**. Quien se entrena es quien decide con ella, y el modelo le supone la mejor respuesta; el λ de la mesa describe cuánto cortan los demás. Con R R C S no sale nunca. *El usuario pidió que «casi nunca» se llegara a descartar con ella: queda por confirmar que «nunca» le vale, antes del paso 4.*
+- «¿Qué tiras?»: combinaciones × `p_habla` × probabilidad de que den mus los de después, y **solo si el entrenador no corta con esa mano**. Quien se entrena es quien decide con ella, y el modelo le supone la mejor respuesta; el λ de la mesa describe cuánto cortan los demás. Con R R C S no sale nunca. *Confirmado por el usuario el 2026-10-13: «nunca» vale. Son las situaciones a las que llega quien decide bien el mus o corto; en «Ajustadas» y en el repaso de fallos puede salir cualquier mano.*
 
 **Tantos por cada 100 manos de partida.** No en todas las manos toca decidir. En la mesa Normal se decide mus o corto en el 69 % de las manos (84 % si se da mucho mus, 55 % si se corta mucho), y se llega a descartar en el 19 %. El resumen multiplica lo perdido por decisión por esa fracción.
 
@@ -984,7 +984,7 @@ Los scripts que leen el pie (`prueba-sin-conexion`, `comprobar-publicada`) entie
 
 **El resumen** da los tantos perdidos en la serie y, solo en «Como en la mesa», el ritmo por cada 100 manos de partida. Debajo, el progreso acumulado en esa mesa. En «Ajustadas» no se da el ritmo: las manos no salen como en una partida.
 
-**Que quepa en el móvil.** Tras responder, las cartas se encogen y el «contra qué se compara» pasa al bloque de la valoración. Así, con la web instalada en un iPhone 15, el veredicto y los lances caben casi siempre sin desplazar; en los «Daba igual», que llevan más texto, el último lance queda bajo el botón.
+**Que quepa en el móvil.** Tras responder, las cartas se encogen y el «contra qué se compara» pasa al bloque de la valoración. Así, con la web instalada en un iPhone 15, el veredicto y los lances caben casi siempre sin desplazar; en los «Daba igual», que llevan más texto, el último lance queda bajo el botón. *El usuario pide arreglarlo en el paso 4 (2026-10-13): con la web instalada no debe quedar nada bajo el botón.*
 
 **Comprobaciones:**
 - *Tests del flujo con los datos reales:* una serie entera en la que lo que sale en pantalla para cada mano se compara con lo que dicen los datos; las diez respuestas quedan anotadas, completas y en orden.
