@@ -141,7 +141,9 @@ Algunos cálculos tardan entre uno y varios minutos la primera vez y se guardan 
 
 Las decisiones dudosas de cortar o dar mus dependen de cuánto se corta en la mesa. Para ajustarlo con datos reales:
 
-1. Apunta cada mano en `datos/manos_reales.csv`: partida, número de mano y la secuencia de rondas (`mus` o la posición que corta; por ejemplo, `mus mus mano`). La primera mano de cada partida se excluye: se juega con mus corrido y sin señas, y quien corta pasa a ser mano. También se excluyen las manos que no se recuerdan. Hay dos columnas más: tu posición y si has usado la web.
+Los datos de este repositorio son de mis partidas online en la aplicación Mus Maestro: «mi mesa» son los jugadores que me tocan allí, no un grupo fijo. Las señas son emojis que ven los cuatro jugadores durante un segundo, y cuando alguien se va lo sustituye un bot.
+
+1. Apunta cada mano en `datos/manos_reales.csv`: partida, número de mano y la secuencia de rondas (`mus` o la posición que corta; por ejemplo, `mus mus mano`). La primera mano de cada partida se excluye: se juega con mus corrido y sin señas, y quien corta pasa a ser mano (la regla tradicional, la del reglamento de Fournier). También se excluyen las manos que no se recuerdan y las jugadas con un bot. Hay dos columnas más: tu posición y si has usado la web.
 2. Ejecuta `python -m mus manos-reales`. Valida el fichero, cuenta las manos y regenera `datos/mus_real.csv` (por partida) y `datos/cortes_por_posicion.csv` (por partida y posición), que solo usan la primera ronda.
 3. Ejecuta `python -m mus calibrar`. Muestra el porcentaje de manos con mus, con su intervalo de confianza, y el λ con el que el modelo da ese mismo porcentaje. Compara también el corte de cada posición con lo que predice el modelo. Avisa si los dos resúmenes no coinciden con las anotaciones.
 4. El comando no cambia nada por sí solo. El λ calibrado se puede usar con `--factor-corte`. Por defecto, `cortar`, `corte-mesa` y `testigos` usan el tipo de mesa "Normal" de la web; `--mesa` elige otro (`mucho-mus`, `normal`, `se-corta`). La mesa "Normal" (30 % de mus) solo se cambia si el intervalo de los datos la excluye.

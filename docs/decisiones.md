@@ -230,7 +230,7 @@ Definiciones usadas para preguntar al compañero, sobre su mano inicial:
 
 ## 2026-10-07 · Calibración de λ con partidas reales
 
-**Qué se mide.** El usuario anota, en partidas reales contra personas, en qué proporción de manos hay mus en la primera ronda (`datos/mus_real.csv`, una fila por sesión). El modelo da esa misma proporción en función de λ: P(hay mus) baja de forma monótona desde el 100 % con λ = 0 hasta el 11 % con λ = 1. Por eso se puede invertir: se busca el λ que reproduce lo observado, interpolando una curva de 11 puntos.
+**Qué se mide.** El usuario anota, en partidas reales contra personas (online, en Mus Maestro: ver la entrada del 2026-10-13), en qué proporción de manos hay mus en la primera ronda (`datos/mus_real.csv`, una fila por sesión). El modelo da esa misma proporción en función de λ: P(hay mus) baja de forma monótona desde el 100 % con λ = 0 hasta el 11 % con λ = 1. Por eso se puede invertir: se busca el λ que reproduce lo observado, interpolando una curva de 11 puntos.
 
 **Incertidumbre.** El intervalo de λ sale de invertir el intervalo de Wilson de la proporción observada. Si parte del intervalo queda fuera de lo que da el modelo (menos del 11 % de mus), el extremo se recorta a 1 y se avisa.
 
@@ -368,7 +368,7 @@ Las dos limitaciones se explicarán claramente en la web:
 
 > **Corregido el mismo día.** En la partida 1, la primera mano ("corto (tercero)") también era la especial y no se había excluido: los datos de esta entrada llevaban una mano de más (45 en vez de 44, y un corte de más del tercero). Las cifras de abajo ya están corregidas; entre corchetes, las que se publicaron. Los datos actuales, con 15 partidas, están en "Datos reales: 15 partidas, anotadas mano a mano".
 
-**Qué manos se cuentan.** El usuario excluye la primera mano de cada partida: se juega con "mus corrido y sin señas", la norma tradicional para determinar la mano sin comunicación entre compañeros, así que no refleja decisiones de mus. También excluye una mano que no recuerda. Quedan 9 sesiones con 44 manos [45]; la primera sustituye a la que había. **Fase 6:** al modelar la partida completa, la primera mano de cada partida tiene estas reglas especiales.
+**Qué manos se cuentan.** El usuario excluye la primera mano de cada partida: se juega con "mus corrido y sin señas", la norma tradicional para determinar la mano sin comunicación entre compañeros (la del reglamento de Fournier), así que no refleja decisiones de mus. También excluye una mano que no recuerda. Quedan 9 sesiones con 44 manos [45]; la primera sustituye a la que había. **Fase 6:** al modelar la partida completa, la primera mano de cada partida tiene estas reglas especiales.
 
 **Calibración.** Hubo mus en 13 de 44 manos: 30 % (IC 95 %: 18-44 %) [29 %, 18-43 %]. Corresponde a λ = 0,64 (intervalo 0,45-0,84) [0,65; 0,46-0,85]. La mesa "Normal" de la web usa λ = 0,63 (30 %), dentro del intervalo, así que se deja como está. `calibrar` lo comprueba ahora cada vez.
 
@@ -612,7 +612,7 @@ Cada uno necesita cosas distintas, y hoy todo va en una sola columna larga. Dos 
 - `calibrar` avisa si los resúmenes no coinciden con las anotaciones, y un test falla si los versionados quedan desfasados.
 
 **Criterios (del usuario).**
-- **Se excluye la primera mano de cada partida.** Se juega con mus corrido y sin señas, y quien corta pasa a ser mano: así se decide la mano de la partida. No refleja decisiones de mus normales. **Fase 6:** la partida completa tiene que modelar esta primera mano aparte.
+- **Se excluye la primera mano de cada partida.** Se juega con mus corrido y sin señas, y quien corta pasa a ser mano: así se decide la mano de la partida. Es la regla tradicional, la del reglamento de Fournier. No refleja decisiones de mus normales. **Fase 6:** la partida completa tiene que modelar esta primera mano aparte.
 - Se excluyen las manos que no se recuerdan (una).
 - Para las estadísticas solo cuenta la primera ronda.
 - **Corrección:** en la partida 1, la primera mano también era la especial. Los datos anteriores llevaban una mano de más; la entrada anterior está corregida.
@@ -998,3 +998,23 @@ Los scripts que leen el pie (`prueba-sin-conexion`, `comprobar-publicada`) entie
 - Probarlo en el iPhone del usuario: es la parada de este paso.
 - El ejercicio de descarte, la pantalla de progreso con «Exportar» e «Importar» y el repaso de fallos (paso 4). El núcleo ya los tiene; falta la interfaz.
 - La versión sigue siendo la 0.1.1 hasta la publicación. Nada de esto está en `main`.
+
+## 2026-10-13 · Datos reales: son de Mus Maestro, y regla de los bots
+
+**Contexto que faltaba (del usuario).** Todas sus partidas anotadas, también las 15 primeras, son **online, en la aplicación Mus Maestro** del móvil. Estos documentos hablaban de «la mesa del usuario» como si fuera un grupo fijo, y no lo es: **«tu mesa» son los jugadores de Mus Maestro** que le tocan en cada partida. Lo que eso implica:
+
+- **Las señas son emojis que ven los cuatro jugadores durante un segundo.** No son secretas: los rivales las ven igual que el compañero, y el usuario ve las de los rivales.
+- **Cuando un jugador se va, lo sustituye un bot** que siempre pasa y nunca quiere.
+- El usuario juega todas las partidas; los otros tres cambian de una a otra.
+
+**Regla nueva: se excluyen de las estadísticas las manos jugadas con un bot.** Un bot no decide como una persona, y lo que se mide es cómo juegan las personas. Desde ahora el usuario apunta «bot desde la mano X» y se excluyen las manos desde esa. Si no se sabe desde cuándo, se excluye la partida entera, que se queda en el fichero con su motivo. No hace falta cambiar el formato: una mano excluida ya lleva su motivo.
+
+**La primera mano de cada partida** (mus corrido y sin señas; quien corta pasa a ser mano) es la regla tradicional, la del **reglamento de Fournier**. La fuente se ha añadido donde estaba anotada la regla.
+
+**Qué cambia en lo ya hecho** (lectura de Claude, sin tocar el modelo ni la web):
+- La mesa «Normal» (30 % de mus) está calibrada con jugadores de Mus Maestro. Describe a esa población, que no tiene por qué cortar como una mesa presencial o de torneo.
+- Que los otros tres jugadores cambien hace más razonable tratar las partidas como independientes entre sí. Las manos de una misma partida siguen sin serlo.
+- La web trata las señas como información que solo da el compañero. En Mus Maestro son públicas: el modelo no usa las señas de los rivales, ni el hecho de que ellos vean las del compañero. Es una cosa más que tener en cuenta en la versión 2 (señas tras el mus, modo torneo).
+- En las 15 primeras partidas no se apuntó si hubo algún bot. Queda como limitación de esos datos, salvo que el usuario lo recuerde.
+
+**Pendiente.** La sesión del 2026-10-12 todavía no está en `datos/manos_reales.csv`: faltan las anotaciones mano a mano. Sus resultados se anotarán cuando estén.
