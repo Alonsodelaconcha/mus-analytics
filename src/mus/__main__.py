@@ -60,14 +60,17 @@ from mus.calibracion import (
     MANOS_RECOMENDADAS,
     RUTA_CORTES,
     RUTA_DATOS,
+    CortesPorPosicion,
     Observacion,
     calibrar,
     comparar_cortes,
+    contraste_segundo_postre,
     cortes_del_modelo,
     curva_hay_mus,
     leer_cortes,
     leer_observaciones,
     leer_partidas,
+    p_binomial_bilateral,
     variacion_entre_partidas,
 )
 from mus.cartas import parsear_mano
@@ -98,9 +101,13 @@ from mus.entrenador import contexto as contexto_entrenador
 from mus.equity import POSICIONES, EquityMano, cargar_tabla_equity, equity, simular_equity
 from mus.evaluacion import Lance, jugada_pares, puntos_juego, resolver_mano, suma
 from mus.manos_reales import (
+    RESULTADOS,
     RUTA_MANOS,
+    ManoReal,
+    contar_cortes,
     escribir_resumenes,
     leer_manos,
+    por_sesion,
     resumenes_desfasados,
     resumir,
     rondas_siguientes,
@@ -604,6 +611,11 @@ def _porcentaje(e: Estimacion) -> str:
     return f"{100 * e.p:.0f} % (IC 95 %: {100 * bajo:.0f}-{100 * alto:.0f} %)"
 
 
+def _cuantas(n: int, nombre: str) -> str:
+    """"1 partida", "9 partidas"."""
+    return f"{n} {nombre}" + ("" if n == 1 else "s")
+
+
 def cmd_manos_reales(args: argparse.Namespace) -> None:
     manos = leer_manos(args.anotaciones)
     resumenes = resumir(manos)
@@ -633,18 +645,27 @@ def cmd_manos_reales(args: argparse.Namespace) -> None:
     con_posicion = [m for m in incluidas if m.mi_posicion is not None]
     print(f"\nManos con tu posición anotada: {len(con_posicion)} de {len(incluidas)}; usando la web: "
           f"{sum(m.usa_web is True for m in incluidas)}.")
+    print("Resultado de las partidas: " + ", ".join(
+        [f"{resultado} {sum(r.resultado == resultado for r in resumenes)}" for resultado in RESULTADOS]
+        + [f"sin apuntar {sum(r.resultado is None for r in resumenes)}"]) + ".")
+    print("Sesiones: " + "; ".join(
+        f"{fecha or 'sin fecha'}, {_cuantas(len({m.partida for m in de_sesion}), 'partida')} y "
+        f"{_cuantas(sum(not m.excluida for m in de_sesion), 'mano')}"
+        for fecha, de_sesion in por_sesion(manos)) + ".")
     print()
     for ruta in escribir_resumenes(args.anotaciones, args.datos, args.cortes):
         print(f"Generado {ruta}")
 
 
 def cmd_calibrar(args: argparse.Namespace) -> None:
+    # Con los ficheros por defecto están también las anotaciones mano a mano.
+    con_anotaciones = (args.manos is None and RUTA_MANOS.exists()
+                       and (args.datos, args.cortes) == (str(RUTA_DATOS), str(RUTA_CORTES)))
     if args.manos is not None:
         observacion = Observacion(args.manos, args.con_mus or 0)
         origen = "datos de la línea de órdenes"
     else:
-        if ((args.datos, args.cortes) == (str(RUTA_DATOS), str(RUTA_CORTES))
-                and RUTA_MANOS.exists()):
+        if con_anotaciones:
             desfasados = resumenes_desfasados(RUTA_MANOS, args.datos, args.cortes)
             if desfasados:
                 print(f"AVISO: {' y '.join(map(str, desfasados))} no coinciden con {RUTA_MANOS}. "
@@ -687,6 +708,64 @@ def cmd_calibrar(args: argparse.Namespace) -> None:
              else "FUERA del intervalo de los datos: conviene revisarla."))
     if args.manos is None and Path(args.cortes).exists():
         _imprimir_cortes(args, normal.nombre, lam_normal, observacion)
+    if con_anotaciones:
+        manos = leer_manos(RUTA_MANOS)
+        modelo = cortes_del_modelo(_reglas(args), lam_normal)
+        _imprimir_pareja_segundo_postre(manos, modelo)
+        _imprimir_cortes_segun_quien(manos, modelo)
+
+
+def _fraccion(corta: int, habla: int) -> str:
+    return f"{corta}/{habla} = {100 * corta / habla:.0f} %" if habla else "no habló"
+
+
+def _imprimir_pareja_segundo_postre(manos: Sequence[ManoReal], modelo: Sequence[float]) -> None:
+    """Cómo se reparte el corte entre el segundo y el postre, por sesiones y en total."""
+    grupos = [(fecha or "sin fecha", de_sesion) for fecha, de_sesion in por_sesion(manos)]
+    if len(grupos) > 1:
+        grupos.append(("todas", list(manos)))
+    print("\nDentro de la pareja segundo-postre (hipótesis: el segundo da mus y deja decidir al "
+          f"postre, que habla el último; el modelo espera {100 * modelo[1]:.0f} % y "
+          f"{100 * modelo[3]:.0f} %):")
+    print(f"  {'sesión':<12}{'manos':>6}{'segundo corta':>17}{'postre corta':>17}"
+          f"{'postre − segundo, frente al modelo':>38}{'p (simulación)':>16}")
+    for nombre, de_grupo in grupos:
+        habla, corta = contar_cortes(de_grupo)
+        fila = (f"  {nombre:<12}{habla[0]:>6}{_fraccion(corta[1], habla[1]):>17}"
+                f"{_fraccion(corta[3], habla[3]):>17}")
+        if habla[1] and habla[3]:
+            c = contraste_segundo_postre(CortesPorPosicion(habla, corta), modelo)
+            fila += f"{f'{100 * c.diferencia:+.0f} puntos':>38}{c.p_valor.p:>16.3f}"
+        print(fila)
+
+
+def _imprimir_cortes_segun_quien(manos: Sequence[ManoReal], modelo: Sequence[float]) -> None:
+    """Corte por posición separando las decisiones del usuario de las de los demás."""
+    con_posicion = sum(not m.excluida and m.mi_posicion is not None for m in manos)
+    if con_posicion == 0:
+        return
+    mias, ajenas = contar_cortes(manos, "yo"), contar_cortes(manos, "otros")
+    print(f"\nCorte por posición según de quién es la decisión ({con_posicion} manos con tu "
+          "posición anotada); entre paréntesis, p frente al modelo (binomial):")
+    print(f"  {'posición':<10}{'tú: corta/habla':>26}{'los demás: corta/habla':>30}{'modelo':>9}")
+    for p in POSICIONES:
+        celdas = []
+        for habla, corta in (mias, ajenas):
+            celda = _fraccion(corta[p - 1], habla[p - 1])
+            if habla[p - 1]:
+                celda += f" (p = {p_binomial_bilateral(corta[p - 1], habla[p - 1], modelo[p - 1]):.2f})"
+            celdas.append(celda)
+        print(f"  {NOMBRE_POSICION[p]:<10}{celdas[0]:>26}{celdas[1]:>30}{100 * modelo[p - 1]:>8.0f} %")
+    print(f"  En total: tú cortas {_fraccion(sum(mias[1]), sum(mias[0]))} de las veces que te toca "
+          f"hablar; los demás, {_fraccion(sum(ajenas[1]), sum(ajenas[0]))}.")
+    if ajenas[0][0]:
+        comparacion = comparar_cortes(CortesPorPosicion(*ajenas), modelo)
+        x, grados, p_valor = comparacion.chi2()
+        print(f"  Los demás, contraste global: χ² = {x:.2f} con {grados} g.l., p = {p_valor:.2f}.")
+        if ajenas[0][1] and ajenas[0][3]:
+            c = contraste_segundo_postre(CortesPorPosicion(*ajenas), modelo)
+            print(f"  Los demás, postre − segundo frente al modelo: {100 * c.diferencia:+.0f} puntos "
+                  f"(p = {c.p_valor.p:.3f} por simulación).")
 
 
 def _imprimir_cortes(args: argparse.Namespace, nombre_mesa: str, lam: float,

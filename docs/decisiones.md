@@ -1015,6 +1015,84 @@ Los scripts que leen el pie (`prueba-sin-conexion`, `comprobar-publicada`) entie
 - La mesa «Normal» (30 % de mus) está calibrada con jugadores de Mus Maestro. Describe a esa población, que no tiene por qué cortar como una mesa presencial o de torneo.
 - Que los otros tres jugadores cambien hace más razonable tratar las partidas como independientes entre sí. Las manos de una misma partida siguen sin serlo.
 - La web trata las señas como información que solo da el compañero. En Mus Maestro son públicas: el modelo no usa las señas de los rivales, ni el hecho de que ellos vean las del compañero. Es una cosa más que tener en cuenta en la versión 2 (señas tras el mus, modo torneo).
-- En las 15 primeras partidas no se apuntó si hubo algún bot. Queda como limitación de esos datos, salvo que el usuario lo recuerde.
+- En las 15 primeras partidas no se apuntó si hubo algún bot, y el usuario no lo recuerda: queda como limitación de esos datos.
 
-**Pendiente.** La sesión del 2026-10-12 todavía no está en `datos/manos_reales.csv`: faltan las anotaciones mano a mano. Sus resultados se anotarán cuando estén.
+Los datos de la sesión del 2026-10-12 y sus resultados están en la entrada siguiente.
+
+## 2026-10-13 · Datos reales: la sesión del 12 de octubre (112 manos en total)
+
+**Qué se añade.** Las 9 partidas de la sesión del 2026-10-12 (en el fichero, de la 16 a la 24; en la nota del usuario, de la 1 a la 9): 54 manos anotadas, con la posición del usuario en cada una, sin usar la web en ninguna, y con la fecha y el resultado de cada partida. Cuentan 41 manos:
+- Se excluyen las 9 primeras manos, como siempre.
+- **La partida 18 (la 3 de la sesión) se excluye entera:** el compañero se salió y lo sustituyó un bot, sin saber desde qué mano. Sigue en el fichero, con su motivo. Habría añadido 4 manos.
+- La partida 17 solo tuvo la primera mano. En la 24 el usuario no apuntó las manos siguientes a la quinta ni el resultado.
+- Corrección del usuario: en la mano 2 de la partida 22 era segundo, no tercero. La anotación original se conserva, con la corrección al lado.
+
+**Formato.** `datos/manos_reales.csv` tiene dos columnas nuevas, `fecha` y `resultado` (`ganamos` o `perdimos`). Son de la partida y se repiten en sus manos; en las 15 primeras partidas van vacías. La línea con que el usuario cerró cada partida («GANAMOS», «No apunté más»...) queda al final de la anotación de su última mano. La validación comprueba además que todas las manos de una partida llevan la misma fecha y el mismo resultado, y la regla de los bots: excluida una mano por bot, lo están las siguientes.
+
+**Las cuentas del usuario, comprobadas.** Las hizo a mano y coinciden todas con lo que sale de las anotaciones; quedan fijadas en un test.
+
+| | Manos | Con mus | Mano | Segundo | Tercero | Postre |
+|---|---|---|---|---|---|---|
+| Sesión, sin la partida con bot | 41 | 9 | 9 de 41 | 6 de 32 | 4 de 26 | 13 de 22 |
+| La partida con bot (no cuenta) | 4 | 1 | 1 | 1 | 1 | 0 |
+| Todo (22 partidas con manos válidas) | 112 | 33 | 23 de 112 | 21 de 89 | 12 de 68 | 23 de 56 |
+
+Nota del usuario con las anotaciones: «en TODAS estas partidas uno de los jugadores SOY YO. Las estadísticas podrían verse condicionadas por mi tipo de juego. Aun así, creo que no es demasiado agresivo ni demasiado conservador, y varía según la partida». Es la limitación ya anotada; con su posición apuntada ya se puede separar lo suyo (punto 3).
+
+### 1. Calibración: la mesa «Normal» no cambia
+
+Mus en 33 de 112 manos = 29 % (IC 95 %: 22-38 %). Corresponde a λ = 0,64 (intervalo 0,52-0,77). La mesa «Normal» (λ = 0,63, 30 %) queda dentro. Con las 71 manos anteriores era 34 % (24-45 %) y λ = 0,58 (0,44-0,73).
+
+Variación entre las 22 partidas: p = 0,12 por permutaciones, y contando cada partida como un bloque el error es ×1,17 (antes, p = 0,33 y ×1,06). Con ese factor el intervalo sería de unos ± 9 puntos en vez de ± 8: el 30 % sigue dentro. Van 112 de las 200 manos de la meta.
+
+### 2. Corte por posición
+
+| Posición | Observado | Modelo | p (binomial) |
+|---|---|---|---|
+| Mano | 23/112 = 21 % | 21 % | 1,00 |
+| Segundo | 21/89 = 24 % | 33 % | 0,07 |
+| Tercero | 12/68 = 18 % | 18 % | 1,00 |
+| Postre | 23/56 = 41 % | 30 % | 0,11 |
+
+En conjunto encaja (χ² = 6,42 con 4 g.l., p = 0,17). Por parejas, también: la de la mano corta el 19 % de las veces (modelo, 20 %) y la de segundo y postre el 30 % (modelo, 32 %). La segunda corta 1,56 veces más que la primera (IC 95 %: 1,06-2,30); el modelo predice 1,59.
+
+**Hipótesis del usuario (sin confirmar; no cambia el modelo).** Dentro de la pareja de segundo y postre, el segundo da mus y deja decidir al postre, que habla el último. Es la coordinación de pareja que el modelo no tiene: cada jugador decide con sus cartas.
+
+Su contraste (`calibracion.contraste_segundo_postre`): cuánto se separan el postre y el segundo del modelo, en sentidos opuestos, y con qué frecuencia daría el modelo una separación así (por simulación, con las mismas manos).
+
+| Datos | Segundo corta | Postre corta | Postre − segundo, frente al modelo | p |
+|---|---|---|---|---|
+| Las 15 partidas anteriores | 15/57 = 26 % | 10/34 = 29 % | +5 puntos | 0,61 |
+| Sesión del 12 de octubre | 6/32 = 19 % | 13/22 = 59 % | +43 puntos | 0,002 |
+| Todo | 21/89 = 24 % | 23/56 = 41 % | +20 puntos | 0,018 |
+
+**Por qué se queda en hipótesis:**
+- **El efecto del postre sale de una sola sesión.** En las 15 partidas anteriores el postre cortó como dice el modelo (29 % frente a 30 %). Las dos tandas difieren en el postre (Fisher, p = 0,05).
+- **La hipótesis nace de mirar estos mismos datos**, así que esos p son optimistas. Lo único anotado de antes (2026-10-08) es que el segundo cortaba menos de lo previsto.
+- Son 22 decisiones del postre.
+- **Qué la confirmaría:** que en las próximas sesiones el postre siga cortando claramente más del 30 % y el segundo menos del 33 %. `python -m mus calibrar` enseña ahora este reparto sesión a sesión.
+
+### 3. ¿Es cosa del usuario o de todos?
+
+Solo con las 41 manos de la sesión, que son las que llevan su posición. Cada decisión es suya si la posición que habla es la suya; si no, de otro jugador.
+
+| Posición | El usuario | Los demás | Modelo |
+|---|---|---|---|
+| Mano | 4/10 = 40 % | 5/31 = 16 % | 21 % |
+| Segundo | 1/9 = 11 % | 5/23 = 22 % | 33 % |
+| Tercero | 3/8 = 38 % | 1/18 = 6 % | 18 % |
+| Postre | 3/5 = 60 % | 10/17 = 59 % | 30 % |
+
+- **Es de todos.** Sin las decisiones del usuario, el postre corta 10 de 17 (59 %; p = 0,02 frente al modelo) y el segundo 5 de 23 (22 %): +39 puntos entre los dos, p = 0,014. Y el usuario hace lo mismo: de segundo corta 1 de 9 y de postre 3 de 5.
+- Cuando el postre no era él: su compañero (él de segundo) cortó 5 de 7, y un rival, 5 de 10.
+- En esta sesión, los demás no encajan con el modelo ni en conjunto (χ² = 10,14, p = 0,04), por el postre.
+- El usuario corta algo más que los demás (11 de 32 frente a 21 de 89; Fisher, p = 0,25: no se distingue), y lo hace de mano y de tercero. Son muy pocas decisiones para leer más.
+
+### 4. Otra ronda de mus
+
+En la sesión, ninguna de las 9 manos con mus tuvo una segunda ronda (IC 95 %: 0-30 %). En total son 8 de 32 = 25 % (IC 95 %: 13-42 %); antes, 8 de 23 = 35 %. Las dos tandas no llegan a distinguirse (Fisher, p = 0,07). Es un dato para la Fase 6.
+
+### Lo demás
+
+- **Resultados:** 4 partidas ganadas y 4 perdidas en la sesión (una de las perdidas, la del bot). Se guardan; todavía no se usan.
+- **Limitaciones que siguen:** las manos de una partida no son independientes; en las 15 primeras partidas no se sabe si hubo algún bot (el usuario no lo recuerda); y su posición solo está apuntada en esta sesión.

@@ -15,20 +15,29 @@ from mus.calibracion import (
 )
 from mus.manos_reales import (
     COLUMNAS,
+    MOTIVO_BOT,
+    MOTIVO_BOT_PARTIDA,
+    contar_cortes,
     escribir_resumenes,
     leer_manos,
     parsear_rondas,
+    por_sesion,
     resumenes_desfasados,
     resumir,
     rondas_siguientes,
+    texto_mus_real,
 )
 
 RAIZ = Path(__file__).resolve().parents[1]
 CABECERA = ",".join(COLUMNAS)
 
 
-def escribir(ruta: Path, filas: list[str]) -> Path:
-    ruta.write_text("\n".join([CABECERA, *filas]) + "\n", encoding="utf-8")
+def escribir(ruta: Path, filas: list[str], fecha: str = "", resultado: str = "") -> Path:
+    """Escribe un fichero de anotaciones. Las filas van sin las dos columnas de la
+    partida (fecha y resultado), que se añaden aquí tras el número de partida."""
+    completas = [f"{partida},{fecha},{resultado},{resto}"
+                 for partida, resto in (fila.split(",", 1) for fila in filas)]
+    ruta.write_text("\n".join([CABECERA, *completas]) + "\n", encoding="utf-8")
     return ruta
 
 
@@ -142,6 +151,8 @@ def test_cli(tmp_path, capsys):
     assert "mano 1 de 6, segundo 1 de 5, tercero 0 de 4, postre 1 de 4" in salida
     assert "otra ronda de mus en 1 de 2" in salida
     assert "Manos con tu posición anotada: 2 de 6; usando la web: 1" in salida
+    assert "Resultado de las partidas: ganamos 0, perdimos 0, sin apuntar 1." in salida
+    assert "Sesiones: sin fecha, 1 partida y 6 manos." in salida
     assert mus.exists() and cortes.exists()
 
 
@@ -188,6 +199,58 @@ def test_cuentas_del_usuario_partidas_1_a_15():
     s = rondas_siguientes(manos)
     assert (s.otra_ronda, s.conocidas) == (8, 23)
     assert all(m.mi_posicion is None and m.usa_web is None for m in manos)
+    assert all(m.fecha is None and m.resultado is None for m in manos)
+
+
+def test_cuentas_del_usuario_sesion_del_2026_10_12():
+    """Las cuentas hechas a mano por el usuario (partidas 16-24, anotadas el 2026-10-13)."""
+    todas = leer_manos(RAIZ / "datos" / "manos_reales.csv")
+    sesion = [m for m in todas if 16 <= m.partida <= 24]
+    assert {m.fecha for m in sesion} == {"2026-10-12"} and len(sesion) == 54
+    assert all(m.usa_web is False for m in sesion)
+    assert all((m.mi_posicion is None) == (m.numero == 1) for m in sesion)
+
+    # Sin la partida 3 de la sesión (la 18), que se jugó con un bot: 41 manos, mus en 9.
+    incluidas = [m for m in sesion if not m.excluida]
+    assert (len(incluidas), sum(m.hay_mus for m in incluidas)) == (41, 9)
+    assert contar_cortes(sesion) == ((41, 32, 26, 22), (9, 6, 4, 13))
+    s = rondas_siguientes(sesion)
+    assert (s.otra_ronda, s.conocidas, s.con_mus) == (0, 9, 9)
+
+    # La partida con bot: fuera entera, con su motivo. Habría añadido 4 manos:
+    # un mus y un corte de mano, uno de segundo y uno de tercero.
+    con_bot = [m for m in sesion if m.partida == 18]
+    assert [m.motivo for m in con_bot] == ["primera mano"] + [MOTIVO_BOT_PARTIDA] * 4
+    assert sorted(m.rondas[0] for m in con_bot[1:]) == ["mano", "mus", "segundo", "tercero"]
+    assert 18 not in {r.partida for r in resumir(todas) if r.manos}
+
+    # Con lo anterior: 112 manos, mus en 33.
+    assert contar_cortes(todas) == ((112, 89, 68, 56), (23, 21, 12, 23))
+    assert sum(r.manos for r in resumir(todas)) == 112
+    assert sum(r.con_mus for r in resumir(todas)) == 33
+    total = rondas_siguientes(todas)
+    assert (total.otra_ronda, total.conocidas) == (8, 32)
+
+    # Resultado de cada partida de la sesión; en la última no apuntó cómo acabó.
+    resultados = {r.partida: r.resultado for r in resumir(sesion)}
+    assert [resultados[p] for p in range(16, 25)] == [
+        "ganamos", "ganamos", "perdimos", "ganamos", "perdimos", "perdimos", "ganamos", "perdimos",
+        None]
+    # Corrección del usuario: en la mano 2 de su partida 7 (la 22) era segundo, no tercero.
+    (corregida,) = [m for m in sesion if (m.partida, m.numero) == (22, 2)]
+    assert corregida.mi_posicion == 2 and "era S" in corregida.anotacion
+
+
+def test_cortes_sin_las_decisiones_del_usuario():
+    """En la sesión con su posición anotada: sus decisiones y las de los demás, que juntas
+    son todas (contadas a mano mano a mano el 2026-10-13)."""
+    sesion = [m for m in leer_manos(RAIZ / "datos" / "manos_reales.csv") if m.fecha == "2026-10-12"]
+    mias, ajenas = contar_cortes(sesion, "yo"), contar_cortes(sesion, "otros")
+    assert mias == ((10, 9, 8, 5), (4, 1, 3, 3))
+    assert ajenas == ((31, 23, 18, 17), (5, 5, 1, 10))
+    todas = contar_cortes(sesion)
+    assert tuple(a + b for a, b in zip(mias[0], ajenas[0])) == todas[0]
+    assert tuple(a + b for a, b in zip(mias[1], ajenas[1])) == todas[1]
 
 
 # --- Manos de una misma partida -----------------------------------------------------------
@@ -216,3 +279,93 @@ def test_variacion_permutaciones_frente_a_chi2():
     partidas = [Observacion(200, k) for k in (60, 75, 52, 70, 81, 58)]
     v = variacion_entre_partidas(partidas, permutaciones=50_000)
     assert abs(v.p_valor.p - cola_chi2(v.chi2, v.grados)) < 0.02
+
+
+# --- Fecha y resultado de cada partida ----------------------------------------------------
+
+
+def test_fecha_y_resultado(tmp_path):
+    manos = leer_manos(escribir(tmp_path / "m.csv", PARTIDA, "2026-10-12", "ganamos"))
+    assert {(m.fecha, m.resultado) for m in manos} == {("2026-10-12", "ganamos")}
+    (r,) = resumir(manos)
+    assert (r.fecha, r.resultado) == ("2026-10-12", "ganamos")
+    sin_apuntar = leer_manos(escribir(tmp_path / "m.csv", PARTIDA))
+    assert {(m.fecha, m.resultado) for m in sin_apuntar} == {(None, None)}
+    for fecha, resultado, error in (("12/10/2026", "", "fecha"), ("2026-13-40", "", "fecha"),
+                                    ("", "empate", "resultado")):
+        with pytest.raises(ValueError, match=error):
+            leer_manos(escribir(tmp_path / "m.csv", PARTIDA[:2], fecha, resultado))
+
+
+def test_la_fecha_y_el_resultado_son_de_la_partida(tmp_path):
+    ruta = tmp_path / "m.csv"
+    ruta.write_text("\n".join([CABECERA, "1,2026-10-12,ganamos,1,mano,sí,primera mano,,,",
+                               "1,2026-10-12,perdimos,2,mano,no,,,,"]) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="misma fecha"):
+        leer_manos(ruta)
+
+
+def test_por_sesion(tmp_path):
+    otra = [f"2,{i}," + fila.split(",", 2)[2] for i, fila in enumerate(PARTIDA[:3], start=1)]
+    ruta = tmp_path / "m.csv"
+    escribir(ruta, PARTIDA)
+    con_fecha = escribir(tmp_path / "f.csv", otra, "2026-10-12", "perdimos").read_text(
+        encoding="utf-8").splitlines()[1:]
+    ruta.write_text(ruta.read_text(encoding="utf-8") + "\n".join(con_fecha) + "\n", encoding="utf-8")
+    sesiones = por_sesion(leer_manos(ruta))
+    assert [(fecha, len(manos)) for fecha, manos in sesiones] == [(None, 8), ("2026-10-12", 3)]
+
+
+# --- Manos jugadas con un bot ---------------------------------------------------------------
+
+
+def test_bot_desde_una_mano(tmp_path):
+    """«Bot desde la mano 6»: se excluyen esa y las siguientes."""
+    filas = PARTIDA[:5] + [f"1,{n},{rondas},sí,{MOTIVO_BOT},,," for n, rondas in
+                           ((6, "postre"), (7, "mano"), (8, "mus segundo"))]
+    (r,) = resumir(leer_manos(escribir(tmp_path / "m.csv", filas)))
+    assert (r.manos, r.con_mus) == (3, 2)             # segundo, mus, mus
+    assert dict(r.excluidas) == {"primera mano": 1, "no recordada": 1, MOTIVO_BOT: 3}
+
+
+def test_bot_sin_saber_desde_cuando_excluye_la_partida(tmp_path):
+    con_bot = [PARTIDA[0]] + [f"1,{n},{rondas},sí,{MOTIVO_BOT_PARTIDA},,," for n, rondas in
+                              ((2, "mus tercero"), (3, "mano"))]
+    otra = [f"2,{i}," + fila.split(",", 2)[2] for i, fila in enumerate(PARTIDA[:3], start=1)]
+    resumenes = resumir(leer_manos(escribir(tmp_path / "m.csv", con_bot + otra)))
+    assert [(r.partida, r.manos) for r in resumenes] == [(1, 0), (2, 2)]
+    # La partida sigue en el fichero, pero no entra en los resúmenes de la calibración.
+    assert texto_mus_real(resumenes).splitlines()[1:] == ["2,2,1,primera mano: 1"]
+
+
+@pytest.mark.parametrize("filas, error", [
+    # tras una mano con bot, una sin él
+    ([f"1,2,mano,sí,{MOTIVO_BOT},,,", "1,3,mano,no,,,,"], "siguientes"),
+    ([f"1,2,mano,sí,{MOTIVO_BOT},,,", "1,3,?,sí,no recordada,,,"], "siguientes"),
+    # no se sabe desde cuándo, pero no se excluye la partida entera
+    (["1,2,mano,no,,,,", f"1,3,mano,sí,{MOTIVO_BOT_PARTIDA},,,"], "se excluyen todas"),
+])
+def test_regla_de_los_bots(tmp_path, filas, error):
+    with pytest.raises(ValueError, match=error):
+        leer_manos(escribir(tmp_path / "m.csv", [PARTIDA[0], *filas]))
+
+
+# --- De quién es cada decisión ---------------------------------------------------------------
+
+
+def test_contar_cortes_segun_quien(tmp_path):
+    """Yo de segundo: hablo si la mano da mus. Lo que no decido yo, lo deciden los demás."""
+    filas = [
+        "1,1,mano,sí,primera mano,,,",
+        "1,2,mano,no,,segundo,no,",            # corta la mano: yo no llego a hablar
+        "1,3,segundo,no,,segundo,no,",         # corto yo
+        "1,4,postre,no,,segundo,no,",          # doy mus; corta el postre
+        "1,5,mus tercero,no,,mano,no,",        # doy mus de mano; mus los cuatro
+        "1,6,tercero,no,,,,",                  # sin mi posición: no entra en yo ni en otros
+    ]
+    manos = leer_manos(escribir(tmp_path / "m.csv", filas))
+    assert contar_cortes(manos) == ((5, 4, 3, 2), (1, 1, 1, 1))
+    assert contar_cortes(manos, "yo") == ((1, 2, 0, 0), (0, 1, 0, 0))
+    assert contar_cortes(manos, "otros") == ((3, 1, 2, 2), (1, 0, 0, 1))
+    with pytest.raises(ValueError, match="quien"):
+        contar_cortes(manos, "rivales")
