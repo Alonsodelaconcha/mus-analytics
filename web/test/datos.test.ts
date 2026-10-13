@@ -13,6 +13,7 @@ import {
   tablaParaSenas,
   tantosTotales,
   texto,
+  validarFicheroMesa,
   validarManifiesto,
 } from "../src/nucleo";
 import { indiceMano } from "../src/nucleo/tablas";
@@ -37,7 +38,8 @@ describe("validación del manifiesto", () => {
   });
 
   it("rechaza otro formato, otras reglas, otro orden de manos o un manifiesto roto", () => {
-    expect(() => validarManifiesto(manifiestoModificado((m) => { m.formato = 2; })))
+    // El formato 1 es el de la web 0.1: no traía el desglose por lance.
+    expect(() => validarManifiesto(manifiestoModificado((m) => { m.formato = 1; })))
       .toThrow(/Formato/);
     expect(() => validarManifiesto(manifiestoModificado((m) => {
       (m.reglas as Record<string, unknown>).treinta_y_una_real = true;
@@ -137,6 +139,39 @@ describe("lectura de los datos", () => {
     const normal = await decision("normal");
     expect(normal?.decision).toBe("mus");
     expect(normal?.repartos).toBe(100_000);
+  });
+
+  it("el desglose por lance suma la ventaja, y la mano habla siempre", async () => {
+    for (const { id } of manifiesto.mesas) {
+      const mesa = await datos.mesa(id);
+      for (let i = 0; i < 330; i++) {
+        for (const posicion of [1, 2, 3, 4]) {
+          const d = decisionDe(mesa, escalas, i, posicion);
+          if (d === null) throw new Error("falta una decisión");
+          expect(d.porLance.map((x) => x.lance)).toEqual([...LANCES]);
+          // Cada cifra se redondea a la milésima por separado.
+          const suma = d.porLance.reduce((t, x) => t + x.ventaja, 0);
+          expect(Math.abs(suma - d.ventaja)).toBeLessThan(0.0031);
+          expect(d.porLance.every((x) => x.radio >= 0)).toBe(true);
+          expect(d.pHabla).toBeGreaterThan(0);
+          expect(d.pHabla).toBeLessThanOrEqual(posicion === 1 ? 1 : 0.9999);
+          if (posicion === 1) expect(d.pHabla).toBe(1);
+        }
+      }
+    }
+  });
+
+  it("7 7 4 4 de mano: dando mus se pierde en pares, porque se rompen los duples", async () => {
+    const d = decisionDe(await datos.mesa("normal"), escalas, indiceMano(leerMano("7 7 4 4")), 1);
+    expect(d?.decision).toBe("cortar");
+    expect(d?.porLance.find((x) => x.lance === "pares")?.ventaja).toBeLessThan(-1);
+  });
+
+  it("un fichero de mesa sin el desglose por lance se rechaza", () => {
+    const f = JSON.parse(new TextDecoder().decode(leerDato("mesa-normal.json"))) as Record<string, unknown>;
+    expect(() => validarFicheroMesa(f, "mesa-normal.json", manifiesto)).not.toThrow();
+    delete f.por_lance;
+    expect(() => validarFicheroMesa(f, "mesa-normal.json", manifiesto)).toThrow(/por_lance/);
   });
 
   it("descartes si hay mus: ordenados, el mejor con diferencia 0", async () => {

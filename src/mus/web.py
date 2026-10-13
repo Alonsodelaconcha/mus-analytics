@@ -11,10 +11,11 @@ y calcular la distribución exacta de la mano tras descartarse. Hay dos salidas.
    - ``equity/<señas>.json``: lo mismo sabiendo las señas del compañero. Hay
      un fichero por cada conjunto distinto de manos que pueden dejar las
      señas libres (:func:`mus.senas.grupos_de_senas`; 16 en 8 reyes).
-   - ``mesa-<tipo>.json``, uno por tipo de mesa: ¿cortar o dar mus?, el valor
-     de cada descarte si hay mus y la equity de la mesa tras el mus. Las dos
-     primeras cosas se simulan mano a mano con las cartas fijas, igual que
-     ``python -m mus cortar``.
+   - ``mesa-<tipo>.json``, uno por tipo de mesa: ¿cortar o dar mus? (con la
+     ventaja de dar mus lance a lance y la probabilidad de que te toque
+     hablar), el valor de cada descarte si hay mus y la equity de la mesa tras
+     el mus. Las dos primeras cosas se simulan mano a mano con las cartas
+     fijas, igual que ``python -m mus cortar``.
    - ``manifiesto.json``: versiones, reglas, escalas, orden de los arrays,
      señas, tipos de mesa y la huella SHA-256 de cada fichero.
 
@@ -22,7 +23,9 @@ y calcular la distribución exacta de la mano tras descartarse. Hay dos salidas.
    el núcleo portado a TypeScript da exactamente lo mismo que Python: la
    evaluación de las 330 manos, la lectura de manos escritas, los lances de
    miles de repartos y la distribución exacta de la mano tras cada descarte,
-   con numeradores enteros para comparar sin redondeos.
+   con numeradores enteros para comparar sin redondeos. Y, a partir de los
+   datos ya escritos, la valoración y el peso de cada situación del
+   entrenador (:mod:`mus.entrenador`).
 
 Formato de los números: enteros escalados (probabilidades ×10 000, tantos
 ×1 000) en arrays planos, con el orden descrito en el manifiesto. Es compacto
@@ -61,9 +64,9 @@ from mus.senas import SENAS, grupos_de_senas
 from mus.simulacion import EstimacionMedia, generador, repartir
 from mus.tablas import TablaManos, construir_tabla, potencias_codigo
 
-FORMATO = 1
+FORMATO = 2
 """Versión del formato de los ficheros. Cambiarla si cambia su estructura."""
-VERSION_DECISIONES = "1"
+VERSION_DECISIONES = "2"
 """Cambiarla invalida las decisiones guardadas en caché si cambia su cálculo."""
 
 ESCALA_PROBABILIDAD = 10_000
@@ -154,7 +157,8 @@ def _factor_corte_de_mesa(id_mesa: str, reglas: ReglasMus) -> float:
 class DecisionesMesa:
     """¿Cortar o dar mus? y valor de cada descarte, para cada mano y posición.
 
-    Los arrays por caso tienen forma (manos, 4). Los de opciones, (4, opciones):
+    Los arrays por caso tienen forma (manos, 4); los de lances, (manos, 4,
+    lances). Los de opciones, (4, opciones):
     las opciones de todas las manos van seguidas en el orden canónico de
     :func:`mus.descarte.opciones_descarte`, y las de la mano h ocupan
     ``[inicio[h], inicio[h + 1])``. Lo no calculado queda a NaN (o 0 en los
@@ -172,6 +176,10 @@ class DecisionesMesa:
         opcion_si_hay_mus: tantos esperados si hay mus y me descarto así.
         opcion_diferencia, opcion_radio: esa opción menos la mejor, reparto a
             reparto, y la semiamplitud de su IC 95 %.
+        p_habla: probabilidad de que te toque hablar con esa mano (que den mus
+            todos los anteriores); 1 siendo mano.
+        ventaja_lance, radio_lance: la ventaja de dar mus lance a lance (suman
+            ``ventaja``) y la semiamplitud del IC 95 % de cada una.
     """
 
     factor_corte: float
@@ -187,11 +195,14 @@ class DecisionesMesa:
     opcion_si_hay_mus: np.ndarray
     opcion_diferencia: np.ndarray
     opcion_radio: np.ndarray
+    p_habla: np.ndarray
+    ventaja_lance: np.ndarray
+    radio_lance: np.ndarray
 
 
 _CAMPOS_DECISIONES = ("inicio", "decision", "ventaja", "radio", "cortar", "mus", "p_mus_despues",
                       "n_efectivo", "repartos", "opcion_si_hay_mus", "opcion_diferencia",
-                      "opcion_radio")
+                      "opcion_radio", "p_habla", "ventaja_lance", "radio_lance")
 _CODIGO_DECISION = {"mus": 1, "cortar": -1, "indiferente": 0}
 
 
@@ -212,8 +223,10 @@ def _caso(mesa: MesaConCorte, h: int, posicion: int, n: int, semilla: int) -> tu
                                             o.si_hay_mus_frente_a_la_mejor.media,
                                             _radio(o.si_hay_mus_frente_a_la_mejor))
     v = d.ventaja_mus
+    lances = np.array([[e.media for e in d.ventaja_por_lance],
+                       [_radio(e) for e in d.ventaja_por_lance]])
     return (h, posicion, n, _CODIGO_DECISION[d.decision], v.media, _radio(v), d.cortar.media,
-            d.mus.media, d.p_mus_despues, v.n, opciones)
+            d.mus.media, d.p_mus_despues, v.n, opciones, d.p_habla, lances)
 
 
 _MESA_DEL_PROCESO: MesaConCorte | None = None
@@ -305,22 +318,25 @@ def calcular_decisiones(
                 resultados[(r[0], r[1])] = r
 
     por_caso = {k: np.full((n_manos, len(POSICIONES)), np.nan)
-                for k in ("ventaja", "radio", "cortar", "mus", "p_mus_despues")}
+                for k in ("ventaja", "radio", "cortar", "mus", "p_mus_despues", "p_habla")}
+    por_lance = np.full((2, n_manos, len(POSICIONES), len(Lance)), np.nan)
     decision = np.zeros((n_manos, len(POSICIONES)), dtype=np.int64)
     n_efectivo = np.zeros_like(decision)
     repartos = np.zeros_like(decision)
     opciones = np.full((3, len(POSICIONES), int(inicio[-1])), np.nan)
     for (h, p), r in resultados.items():
-        _, _, n_caso, codigo, ventaja, radio, cortar, mus_, p_despues, n_ef, valores = r
+        (_, _, n_caso, codigo, ventaja, radio, cortar, mus_, p_despues, n_ef, valores, p_habla,
+         lances) = r
         fila = (h, p - 1)
         decision[fila], n_efectivo[fila], repartos[fila] = codigo, n_ef, n_caso
         for clave, valor in (("ventaja", ventaja), ("radio", radio), ("cortar", cortar),
-                             ("mus", mus_), ("p_mus_despues", p_despues)):
+                             ("mus", mus_), ("p_mus_despues", p_despues), ("p_habla", p_habla)):
             por_caso[clave][fila] = valor
         opciones[:, p - 1, inicio[h]:inicio[h + 1]] = valores
+        por_lance[:, h, p - 1] = lances
     return DecisionesMesa(factor, inicio, decision, por_caso["ventaja"], por_caso["radio"],
                           por_caso["cortar"], por_caso["mus"], por_caso["p_mus_despues"],
-                          n_efectivo, repartos, *opciones)
+                          n_efectivo, repartos, *opciones, por_caso["p_habla"], *por_lance)
 
 
 def cargar_decisiones(mesa: MesaConCorte, factor: float, manos: Sequence[int] | None = None, *,
@@ -411,6 +427,12 @@ def _fichero_mesa(tipo: TipoMesa, mesa: MesaConCorte, decisiones: DecisionesMesa
             "p_mus_despues": enteros(decisiones.p_mus_despues, ESCALA_PROBABILIDAD),
             "n_efectivo": enteros(decisiones.n_efectivo),
             "repartos": enteros(decisiones.repartos),
+            "p_habla": enteros(decisiones.p_habla, ESCALA_PROBABILIDAD),
+        },
+        "por_lance": {
+            "orden": "mano, posicion, lance",
+            "ventaja": enteros(decisiones.ventaja_lance, ESCALA_TANTOS),
+            "radio": enteros(decisiones.radio_lance, ESCALA_TANTOS),
         },
         "opciones": {
             "orden": "posicion, opcion (en el orden de manifiesto.descartes)",
@@ -573,6 +595,7 @@ def exportar_referencia(
     *,
     repartos: int = 3000,
     semilla: int = SEMILLA_WEB,
+    datos: str | Path | None = DIRECTORIO_DATOS,
 ) -> list[Path]:
     """Escribe los ficheros de referencia del núcleo en TypeScript.
 
@@ -587,16 +610,26 @@ def exportar_referencia(
       final (sobre C(36, cartas pedidas)): totales por jugada y dos huellas
       Σ numerador·peso que detectan cualquier diferencia. Para una muestra de
       manos, la distribución completa.
+    - ``entrenador.json``: valoración y peso de todas las situaciones del
+      entrenador (:func:`mus.entrenador.referencia`), calculados a partir de
+      los datos de la web que hay en ``datos``. Como depende de ellos, hay que
+      escribirlos antes; con ``datos=None`` no se genera.
     """
+    from mus import entrenador
+
     _solo_ocho_reyes(reglas)
     directorio = Path(directorio)
     tabla = construir_tabla(reglas)
-    return [
+    escritos = [
         _escribir_json(directorio / "evaluacion.json", _referencia_evaluacion(tabla)),
         _escribir_json(directorio / "lances.json",
                        _referencia_lances(tabla, repartos, semilla)),
         _escribir_json(directorio / "descartes.json", _referencia_descartes(tabla, semilla)),
     ]
+    if datos is not None:
+        escritos.append(_escribir_json(directorio / "entrenador.json",
+                                       {"formato": FORMATO, **entrenador.referencia(datos)}))
+    return escritos
 
 
 def _referencia_evaluacion(tabla: TablaManos) -> dict:
@@ -708,6 +741,9 @@ class ConsultaWeb:
     decision: dict[str, float | int | None]
     opciones: list[dict[str, float | str | None]]
     """Descartes de mejor a peor: me_quedo, si_hay_mus, diferencia, radio."""
+    por_lance: dict[str, tuple[float, float]] | None = None
+    """Por lance: la ventaja de dar mus y la semiamplitud de su IC 95 %.
+    ``None`` si la decisión no está calculada."""
 
 
 def consultar_datos(directorio: str | Path, mano: str, posicion: int, mesa: str | None = None,
@@ -755,7 +791,7 @@ def consultar_datos(directorio: str | Path, mano: str, posicion: int, mesa: str 
     info_mesa = next(x for x in m["mesas"] if (x["id"] == mesa if mesa else x["por_defecto"]))
     f = leer(info_mesa["fichero"])
     k = h * 4 + p
-    escala = {"p_mus_despues": ep, "n_efectivo": 1, "repartos": 1, "decision": 1}
+    escala = {"p_mus_despues": ep, "p_habla": ep, "n_efectivo": 1, "repartos": 1, "decision": 1}
     decision = {nombre: (None if v[k] is None else v[k] / escala.get(nombre, et))
                 for nombre, v in f["decision"].items() if nombre != "orden"}
     inicio, conservadas = m["descartes"]["inicio"], m["descartes"]["conservadas"]
@@ -770,7 +806,13 @@ def consultar_datos(directorio: str | Path, mano: str, posicion: int, mesa: str 
                    for c in ("si_hay_mus", "diferencia", "radio")}
         opciones.append({"me_quedo": " ".join(quedo) or "nada", **valores})
     opciones.sort(key=lambda x: -(x["si_hay_mus"] if x["si_hay_mus"] is not None else -np.inf))
-    return ConsultaWeb(texto, posicion, info_mesa["id"], tuple(senas), equity, decision, opciones)
+    n_lances = len(m["lances"])
+    tramo = slice(k * n_lances, (k + 1) * n_lances)
+    ventajas, radios = f["por_lance"]["ventaja"][tramo], f["por_lance"]["radio"][tramo]
+    por_lance = (None if ventajas[0] is None else
+                 {lance: (v / et, r / et) for lance, v, r in zip(m["lances"], ventajas, radios)})
+    return ConsultaWeb(texto, posicion, info_mesa["id"], tuple(senas), equity, decision, opciones,
+                       por_lance)
 
 
 def comprobar_manifiesto(directorio: str | Path = DIRECTORIO_DATOS) -> list[str]:

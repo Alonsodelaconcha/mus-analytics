@@ -30,6 +30,8 @@ function decision(ventaja: number, radio = 0.01, codigo?: DecisionMus["decision"
     pMusDespues: 0.4,
     nEfectivo: 50_000,
     repartos: 100_000,
+    pHabla: 1,
+    porLance: [],
   };
 }
 

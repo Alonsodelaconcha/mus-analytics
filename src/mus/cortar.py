@@ -54,7 +54,9 @@ from mus.tras_mus import (
     equity_simulada,
     ganancia_por_desviarse,
     mejor_respuesta,
+    sumar_lances,
     tantos_netos_por_asiento,
+    tantos_netos_por_lance,
 )
 
 SIMULACIONES_POR_VUELTA = 4_000_000
@@ -454,6 +456,13 @@ class DecisionCorte:
     p_mus_despues: float
     """Probabilidad de que den mus todos los que hablan después."""
     opciones: tuple[OpcionTrasMus, ...]
+    ventaja_por_lance: tuple[EstimacionMedia, ...]
+    """``ventaja_mus`` lance a lance (grande, chica, pares, juego y punto): lo que
+    se gana o se pierde en cada uno por dar mus en vez de cortar. Son los tantos
+    de cada lance sin ponderar, así que con el objetivo «tantos» suman la ventaja."""
+    p_habla: float
+    """Probabilidad de que le toque hablar con esta mano: que den mus todos los
+    anteriores (y, si se da ``companero``, que su mano cumpla la condición)."""
 
     @property
     def decision(self) -> str:
@@ -504,6 +513,10 @@ def valorar_corte(
     rng = generador(semilla)
     pesos, t_ini_todos, despues_todos = [], [], []
     t_mus = [[] for _ in opciones]
+    # Ventaja lance a lance, d = despues·(T_mus − T_ini): Σ alcance·d y Σ alcance·d²
+    # de cada opción (hasta el final no se sabe cuál es la mejor).
+    suma_lance = np.zeros((len(opciones), len(pesos_lance)))
+    cuadrado_lance = np.zeros_like(suma_lance)
 
     hechos = 0
     while hechos < n:
@@ -526,7 +539,8 @@ def valorar_corte(
                     for s in otros}
         pesos.append(alcance)
         despues_todos.append(despues)
-        t_ini_todos.append(tantos_netos_por_asiento(tabla, iniciales, pesos_lance)[:, posicion - 1])
+        ini_lance = tantos_netos_por_lance(tabla, iniciales, posicion)
+        t_ini_todos.append(sumar_lances(ini_lance, pesos_lance))
         for i, opcion in enumerate(opciones):
             inicio = np.zeros(m, dtype=np.int64)
             finales = np.empty((m, JUGADORES), dtype=np.int64)
@@ -540,7 +554,11 @@ def valorar_corte(
                 robado = robo[filas, inicio + k] - robo[filas, inicio]
                 finales[:, s - 1] = tabla.indices_de_codigos(conservadas + robado)
                 inicio += k
-            t_mus[i].append(tantos_netos_por_asiento(tabla, finales, pesos_lance)[:, posicion - 1])
+            mus_lance = tantos_netos_por_lance(tabla, finales, posicion)
+            t_mus[i].append(sumar_lances(mus_lance, pesos_lance))
+            d = despues[:, None] * (mus_lance - ini_lance)
+            suma_lance[i] += alcance @ d
+            cuadrado_lance[i] += alcance @ (d * d)
 
     w = np.concatenate(pesos)
     if w.sum() == 0:
@@ -567,6 +585,12 @@ def valorar_corte(
                        si_hay_mus(t_mus_todos[i] - t_mus_todos[mejor]))
          for i, o in enumerate(opciones)),
         key=lambda x: -x.valor_mus.media)
+    # La ventaja del mejor descarte, lance a lance, con el mismo tamaño efectivo.
+    n_efectivo = max(int(w.sum() ** 2 / (w * w).sum()), 2)
+    medias_lance = suma_lance[mejor] / w.sum()
+    desviaciones = np.sqrt(np.maximum(cuadrado_lance[mejor] / w.sum() - medias_lance ** 2, 0))
+    por_lance = tuple(EstimacionMedia(float(m), float(s), n_efectivo, confianza)
+                      for m, s in zip(medias_lance, desviaciones))
     informacion = "sin información" if companero is None else f"compañero: {companero}"
     return DecisionCorte(
         mano.texto(tabla.baraja), posicion, informacion,
@@ -575,4 +599,6 @@ def valorar_corte(
         _media_ponderada(valores[mejor] - t_ini, w, confianza),
         float((w * despues).sum() / w.sum()),
         tuple(opciones_valoradas),
+        por_lance,
+        float(w.sum() / len(w)),
     )

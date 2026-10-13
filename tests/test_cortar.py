@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import mus.cortar as mc
+from fuerza_bruta import p_habla_exacta
 from mesas_prueba import CORTA_CON_JUEGO, DESCARTE, JUEGO, TABLA, mesa_de
 from mus.__main__ import main
 from mus.cartas import parsear_mano
@@ -16,8 +17,14 @@ from mus.cortar import (
 )
 from mus.descarte import OBJETIVOS, objetivo_con_pesos
 from mus.equity import equity
+from mus.simulacion import generador, repartir
 from mus.testigos import CASOS_TESTIGO, COMPANERO_FLOJO, COMPANERO_VA_BIEN, comparar
-from mus.tras_mus import valorar_opciones_simuladas
+from mus.tras_mus import (
+    sumar_lances,
+    tantos_netos_por_asiento,
+    tantos_netos_por_lance,
+    valorar_opciones_simuladas,
+)
 
 
 class TestPoliticaCorte:
@@ -108,6 +115,55 @@ class TestValorarCorte:
                 assert o.si_hay_mus.media == pytest.approx(o.valor_mus.media, abs=1e-9)
         medias = [o.si_hay_mus.media for o in d.opciones]
         assert medias == sorted(medias, reverse=True)  # el mismo orden que dar mus
+
+    def test_tantos_por_lance_suman_lo_mismo(self):
+        """El desglose por lance no cambia las cifras: sumado, da bit a bit los tantos
+        netos de siempre, con y sin pesos por lance."""
+        repartos = repartir(20_000, TABLA, generador(11)).astype(np.int64)
+        for pesos in (None, (1.0,) * 5, objetivo_con_pesos("grande=2,punto=0").pesos):
+            total = tantos_netos_por_asiento(TABLA, repartos, pesos)
+            for posicion in (1, 2, 3, 4):
+                por_lance = tantos_netos_por_lance(TABLA, repartos, posicion)
+                np.testing.assert_array_equal(sumar_lances(por_lance, pesos),
+                                              total[:, posicion - 1])
+
+    @pytest.mark.parametrize("posicion", [1, 2, 4])
+    def test_ventaja_por_lance(self, posicion):
+        """La ventaja de dar mus, lance a lance, suma la ventaja total."""
+        mesa = mesa_de(CORTA_CON_JUEGO)
+        d = valorar_corte("R C 5 4", posicion, mesa, 20_000, semilla=8)
+        assert len(d.ventaja_por_lance) == 5
+        assert sum(e.media for e in d.ventaja_por_lance) == pytest.approx(d.ventaja_mus.media,
+                                                                           abs=1e-9)
+        assert all(e.n == d.ventaja_mus.n and e.desviacion >= 0 for e in d.ventaja_por_lance)
+        # La mesa de prueba solo premia el juego, pero el desglose cuenta los tantos de
+        # verdad de cada lance: con R C 5 4, dar mus mueve también grande y chica.
+        assert d.ventaja_por_lance[0].media != 0 and d.ventaja_por_lance[1].media != 0
+
+    @pytest.mark.parametrize("mano", ["R C 5 4", "R R C S", "A A 4 5"])
+    @pytest.mark.parametrize("posicion", [1, 2, 3])
+    def test_p_habla_frente_al_calculo_exacto(self, mano, posicion):
+        """P(te toca hablar) es la probabilidad de que den mus los anteriores sabiendo
+        mi mano: de mano es 1, y en las demás posiciones tiene valor exacto."""
+        mesa = mesa_de(CORTA_CON_JUEGO)
+        n = 40_000
+        d = valorar_corte(mano, posicion, mesa, n, semilla=12)
+        exacta = p_habla_exacta(TABLA, TABLA.indice(parsear_mano(mano)), posicion,
+                                1 - CORTA_CON_JUEGO.probabilidades)
+        if posicion == 1:
+            assert d.p_habla == exacta == 1
+        else:  # la política es 0 o 1: p_habla es una proporción
+            assert 0 < exacta < 1
+            assert abs(d.p_habla - exacta) < 4 * np.sqrt(exacta * (1 - exacta) / n)
+
+    @pytest.mark.slow
+    def test_p_habla_de_postre_frente_al_calculo_exacto(self):
+        mesa = mesa_de(CORTA_CON_JUEGO)
+        n = 100_000
+        d = valorar_corte("R C 5 4", 4, mesa, n, semilla=13)
+        exacta = p_habla_exacta(TABLA, TABLA.indice(parsear_mano("R C 5 4")), 4,
+                                1 - CORTA_CON_JUEGO.probabilidades)
+        assert abs(d.p_habla - exacta) < 4 * np.sqrt(exacta * (1 - exacta) / n)
 
     def test_condicion_imposible(self):
         mesa = mesa_de(CORTA_CON_JUEGO)

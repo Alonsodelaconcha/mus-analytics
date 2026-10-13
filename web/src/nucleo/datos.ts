@@ -19,7 +19,7 @@ import { LANCES, type Lance, REGLAS_POR_DEFECTO } from "./evaluacion";
 import { sha256Js } from "./sha256";
 import { tabla } from "./tablas";
 
-export const FORMATO = 1;
+export const FORMATO = 2;
 export const POSICIONES = [1, 2, 3, 4] as const;
 export type Posicion = (typeof POSICIONES)[number];
 export const METRICAS_EQUITY = ["se_juega", "gana_individual", "gana_pareja", "tantos"] as const;
@@ -105,7 +105,11 @@ export interface FicheroMesa {
     readonly p_mus_despues: readonly Entero[];
     readonly n_efectivo: readonly Entero[];
     readonly repartos: readonly Entero[];
+    /** Probabilidad de que te toque hablar: que den mus todos los anteriores. */
+    readonly p_habla: readonly Entero[];
   };
+  /** La ventaja de dar mus lance a lance y su margen; arrays en orden (mano, posición, lance). */
+  readonly por_lance: { readonly ventaja: readonly Entero[]; readonly radio: readonly Entero[] };
   /** Arrays en orden (posición, opción), con las opciones en el orden de `manifiesto.descartes`. */
   readonly opciones: {
     readonly si_hay_mus: readonly Entero[];
@@ -240,8 +244,13 @@ export function validarFicheroMesa(v: unknown, ruta: string, manifiesto: Manifie
   const nOpciones = POSICIONES.length * manifiesto.descartes.conservadas.length;
   const decision = campo(v, "decision", ruta);
   for (const k of ["decision", "ventaja", "radio", "cortar", "mus", "p_mus_despues", "n_efectivo",
-    "repartos"]) {
+    "repartos", "p_habla"]) {
     enteros(campo(decision, k, `${ruta}: decision`), `${ruta}: decision.${k}`, casos);
+  }
+  const porLance = campo(v, "por_lance", ruta);
+  for (const k of ["ventaja", "radio"]) {
+    enteros(campo(porLance, k, `${ruta}: por_lance`), `${ruta}: por_lance.${k}`,
+      casos * LANCES.length);
   }
   const opciones = campo(v, "opciones", ruta);
   for (const k of ["si_hay_mus", "diferencia", "radio"]) {
@@ -410,6 +419,15 @@ export function tantosTotales(e: EquityMano): number {
 export type Decision = "mus" | "cortar" | "indiferente";
 const DECISIONES: Readonly<Record<number, Decision>> = { 1: "mus", [-1]: "cortar", 0: "indiferente" };
 
+/** Lo que se gana (o se pierde, si es negativo) en un lance por dar mus en vez de cortar. */
+export interface VentajaLance {
+  readonly lance: Lance;
+  /** Dar mus − cortar en ese lance, en tantos por mano. */
+  readonly ventaja: number;
+  /** Semiamplitud del intervalo de confianza del 95 %. */
+  readonly radio: number;
+}
+
 export interface DecisionMus {
   /** "indiferente" si el intervalo de confianza de la ventaja contiene el 0. */
   readonly decision: Decision;
@@ -423,6 +441,10 @@ export interface DecisionMus {
   readonly pMusDespues: number;
   readonly nEfectivo: number;
   readonly repartos: number;
+  /** Probabilidad de que te toque hablar con esta mano: que den mus todos los anteriores. */
+  readonly pHabla: number;
+  /** La ventaja lance a lance, en el orden de `LANCES`. Suman la ventaja, salvo el redondeo. */
+  readonly porLance: readonly VentajaLance[];
 }
 
 /** ¿Mus o corto? para una mano y posición en un tipo de mesa (`null` si no está calculado). */
@@ -454,6 +476,12 @@ export function decisionDe(
     pMusDespues: (leer(d.p_mus_despues) ?? Number.NaN) / escalas.probabilidad,
     nEfectivo: leer(d.n_efectivo) ?? 0,
     repartos: leer(d.repartos) ?? 0,
+    pHabla: (leer(d.p_habla) ?? Number.NaN) / escalas.probabilidad,
+    porLance: LANCES.map((lance, l) => ({
+      lance,
+      ventaja: (mesa.por_lance.ventaja[k * LANCES.length + l] ?? Number.NaN) / escalas.tantos,
+      radio: (mesa.por_lance.radio[k * LANCES.length + l] ?? Number.NaN) / escalas.tantos,
+    })),
   };
 }
 

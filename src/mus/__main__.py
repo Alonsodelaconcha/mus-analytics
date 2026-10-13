@@ -92,6 +92,9 @@ from mus.descarte import (
     objetivo_con_pesos,
     simular_descarte,
 )
+from mus.entrenador import HABLAN_ANTES, INTENSIDADES, VEREDICTOS
+from mus.entrenador import consultar as consultar_entrenador
+from mus.entrenador import contexto as contexto_entrenador
 from mus.equity import POSICIONES, EquityMano, cargar_tabla_equity, equity, simular_equity
 from mus.evaluacion import Lance, jugada_pares, puntos_juego, resolver_mano, suma
 from mus.manos_reales import (
@@ -517,6 +520,10 @@ def _imprimir_decision(d: DecisionCorte, baraja) -> None:
     print(f"  Dar mus: {d.mus}  (con el mejor descarte; P(que den mus los que hablan "
           f"después) = {d.p_mus_despues:.3f})")
     print(f"  Dar mus - cortar: {v}  ->  {d.decision.upper()}")
+    print("    lance a lance: " + "; ".join(
+        f"{lance.value} {e.media:+.3f} ± {(e.intervalo[1] - e.intervalo[0]) / 2:.3f}"
+        for lance, e in zip(Lance, d.ventaja_por_lance)))
+    print(f"  P(te toca hablar con esta mano) = {d.p_habla:.3f}")
     print("  Si hay mus, cada descarte (valor de dar mus y descartarse así; frente al mejor):")
     for o in d.opciones[:6]:
         f = o.frente_a_la_mejor
@@ -719,9 +726,14 @@ def _imprimir_cortes(args: argparse.Namespace, nombre_mesa: str, lam: float,
 def cmd_exportar_web(args: argparse.Namespace) -> None:
     reglas = _reglas(args)
     inicio = time.perf_counter()
-    for ruta in exportar_referencia(args.referencia, reglas):
-        print(f"Referencia: {ruta} ({ruta.stat().st_size / 1024:.0f} KB)")
+
+    def referencia() -> None:
+        # La del entrenador se calcula con los datos de la web: van antes.
+        for ruta in exportar_referencia(args.referencia, reglas, datos=args.salida):
+            print(f"Referencia: {ruta} ({ruta.stat().st_size / 1024:.0f} KB)")
+
     if args.solo_referencia:
+        referencia()
         return
     print("Datos de la web. La primera vez tarda bastante (tablas de equity con señas y "
           "simulación mano a mano de cada tipo de mesa); después sale de resultados/cache.",
@@ -735,6 +747,42 @@ def cmd_exportar_web(args: argparse.Namespace) -> None:
     problemas = comprobar_manifiesto(args.salida)
     print("Manifiesto comprobado: todas las huellas coinciden." if not problemas
           else "PROBLEMAS: " + "; ".join(problemas))
+    referencia()
+
+
+def cmd_entrenador(args: argparse.Namespace) -> None:
+    c = consultar_entrenador(args.datos, args.mano, args.posicion, args.mesa)
+    print(f"{c.mano} en posición {c.posicion} ({NOMBRE_POSICION[c.posicion]}); mesa {c.mesa}.")
+    print(f"{HABLAN_ANTES[c.posicion - 1]} {contexto_entrenador(c.nombre_mesa)}")
+    if c.corte is None:
+        print("\nSin decisión precalculada para esta mano.")
+        return
+    titulo = {"mus": "DA MUS", "corta": "CORTA", "igual": "DA IGUAL"}[VEREDICTOS[c.corte.veredicto]]
+    matiz = {"clara": " (claro)", "por-poco": " (por poco)", "igual": ""}[
+        INTENSIDADES[c.corte.intensidad]]
+    print(f"\n¿Mus o corto? {titulo}{matiz}: dar mus - cortar = {c.ventaja:+.3f} ± {c.radio:.3f} "
+          "tantos por mano (IC 95 %).")
+    print(f"  Si respondes «Mus»:   pierdes {c.corte.perdidos_mus / 1000:.3f}")
+    print(f"  Si respondes «Corto»: pierdes {c.corte.perdidos_corto / 1000:.3f}")
+    if c.por_lance is not None:
+        print("  Por dar mus, lance a lance: " + "; ".join(
+            f"{lance} {v:+.3f} ± {r:.3f}" for lance, (v, r) in c.por_lance.items()))
+    print(f"  Te toca hablar con esta mano el {100 * c.p_habla:.1f} % de las veces.")
+    for modo, p in c.probabilidad["corte"].items():
+        print(f"  Modo {modo}: " + (f"sale 1 de cada {1 / p:.0f} situaciones." if p > 0
+                                    else "no sale."))
+    print("\n¿Qué tiras? (si hay mus; tantos esperados y lo que pierdes frente a la mejor)")
+    for o in c.opciones:
+        v = o.valoracion
+        nota = "la mejor" if v.puesto == 0 else "casi igual" if v.vale else "peor"
+        print(f"  me quedo {o.me_quedo:<10}{v.si_hay_mus / 1000:>+8.3f}   {nota:<11}"
+              f"pierdes {v.perdidos / 1000:.3f}")
+    hay_mus = c.p_habla * c.p_mus_despues
+    print(f"  Los otros tres dan mus el {100 * hay_mus:.1f} % de las veces que llevas esta mano.")
+    for modo, p in c.probabilidad["descarte"].items():
+        print(f"  Modo {modo}: " + (f"sale 1 de cada {1 / p:.0f} situaciones." if p > 0
+                                    else "no sale" + (": el entrenador corta con ella."
+                                                      if modo == "mesa" else ".")))
 
 
 def cmd_consultar_web(args: argparse.Namespace) -> None:
@@ -758,6 +806,10 @@ def cmd_consultar_web(args: argparse.Namespace) -> None:
     print(f"\n¿Mus o corto? {nombre}: dar mus - cortar = {d['ventaja']:+.3f} ± {d['radio']:.3f} "
           f"tantos por mano (IC 95 %; {int(d['repartos'])} repartos; P(que den mus los que "
           f"hablan después) = {d['p_mus_despues']:.3f})")
+    if c.por_lance is not None:
+        print("  lance a lance: " + "; ".join(f"{lance} {v:+.3f} ± {r:.3f}"
+                                              for lance, (v, r) in c.por_lance.items()))
+    print(f"  P(te toca hablar con esta mano) = {d['p_habla']:.3f}")
     print("Si hay mus, cada descarte (tantos esperados; frente al mejor, IC 95 %):")
     for o in c.opciones:
         if o["si_hay_mus"] is None:
@@ -975,6 +1027,15 @@ def crear_parser() -> argparse.ArgumentParser:
                                    'p. ej. "dos-reyes,31".')
     p.add_argument("--datos", default=str(DIRECTORIO_DATOS), help="Directorio de los datos.")
     p.set_defaults(func=cmd_consultar_web)
+
+    p = sub.add_parser("entrenador", help="Lo que enseña el entrenador para una mano: qué vale "
+                                           "cada respuesta y con qué frecuencia se plantea.")
+    p.add_argument("mano", help='Mano, p. ej. "R C 5 4".')
+    p.add_argument("--posicion", type=int, choices=POSICIONES, default=1)
+    p.add_argument("--mesa", choices=[t.id for t in TIPOS_MESA],
+                   help="Tipo de mesa (por defecto, la de por defecto de la web).")
+    p.add_argument("--datos", default=str(DIRECTORIO_DATOS), help="Directorio de los datos.")
+    p.set_defaults(func=cmd_entrenador)
 
     p = sub.add_parser("grafica-posicion", help="Equity siendo mano frente a postre.")
     p.add_argument("--salida", required=True)

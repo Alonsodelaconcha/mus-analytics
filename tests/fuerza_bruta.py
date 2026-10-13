@@ -61,3 +61,31 @@ def equity_fuerza_bruta(tabla: TablaManos, heroe: int, posicion: int,
             acumulado[lance] += [pesos[g > 0].sum(), pesos[g == posicion].sum(),
                                  pesos[nuestra].sum(), (pesos * np.where(nuestra, t, -t)).sum()]
     return {l: tuple(v / total) for l, v in acumulado.items()}
+
+
+def p_habla_exacta(tabla: TablaManos, heroe: int, posicion: int, dan_mus: np.ndarray) -> float:
+    """P(dan mus todos los asientos anteriores a ``posicion`` | mi mano), exacta.
+
+    ``dan_mus[s, h]`` = P(el asiento s + 1 da mus con la mano h). Recorre las
+    manos de los asientos anteriores con sus pesos combinatorios (las cartas
+    que ya tienen los demás no se pueden repetir).
+    """
+    if posicion == 1:
+        return 1.0
+    conteos = tabla.conteos.astype(np.int64)
+    restante = np.array(tabla.baraja.copias) - conteos[heroe]
+    w_x = _pesos(restante[None, :], conteos)[0]
+    if posicion == 2:
+        return float(w_x @ dan_mus[0] / w_x.sum())
+    numerador = denominador = 0.0
+    for x in np.nonzero(w_x)[0]:
+        mazo2 = restante - conteos[x]
+        w_y = _pesos(mazo2[None, :], conteos)[0]
+        if posicion == 3:
+            numerador += w_x[x] * dan_mus[0, x] * (w_y @ dan_mus[1])
+            denominador += w_x[x] * w_y.sum()
+        else:
+            w_yz = w_y[:, None] * _pesos(mazo2[None, :] - conteos, conteos)
+            numerador += w_x[x] * dan_mus[0, x] * (dan_mus[1] @ w_yz @ dan_mus[2])
+            denominador += w_x[x] * w_yz.sum()
+    return float(numerador / denominador)

@@ -313,6 +313,36 @@ def tantos_netos_por_asiento(tabla: TablaManos, manos: np.ndarray,
     return neto
 
 
+def tantos_netos_por_lance(tabla: TablaManos, manos: np.ndarray, posicion: int) -> np.ndarray:
+    """(m, lances) tantos netos en paso de la pareja del asiento ``posicion`` (1-4)
+    en cada lance, sin ponderar.
+
+    Sumados por filas con :func:`sumar_lances` dan, bit a bit, la columna de ese
+    asiento de :func:`tantos_netos_por_asiento`.
+    """
+    neto = np.empty((len(manos), len(LANCES)))
+    pareja_de_la_mano = posicion % 2 == 1
+    for l, lance in enumerate(LANCES):
+        g = ganadores_lance(tabla, manos, lance)
+        t = tantos_lance(tabla, manos, lance, g)
+        mia = (g > 0) & ((g % 2 == 1) == pareja_de_la_mano)
+        neto[:, l] = np.where(mia, t, np.where(g > 0, -t, 0))
+    return neto
+
+
+def sumar_lances(por_lance: np.ndarray, pesos_lance: tuple[float, ...] | None = None) -> np.ndarray:
+    """(m,) suma de los lances de :func:`tantos_netos_por_lance`, ponderados por
+    ``pesos_lance`` si se dan. Suma en el mismo orden que
+    :func:`tantos_netos_por_asiento`, para dar exactamente lo mismo."""
+    total = np.zeros(len(por_lance))
+    for l in range(por_lance.shape[1]):
+        peso = 1.0 if pesos_lance is None else pesos_lance[l]
+        if peso == 0:
+            continue
+        total += peso * por_lance[:, l]
+    return total
+
+
 class _Acumulador:
     """Acumula, por asiento y mano final, los resultados de los lances (con pesos)."""
 

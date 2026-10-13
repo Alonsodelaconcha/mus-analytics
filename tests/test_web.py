@@ -10,7 +10,7 @@ from mesas_prueba import CORTA_CON_JUEGO, JUEGO, TABLA, TD, mesa_de
 from mus.__main__ import main
 from mus.cartas import parsear_mano
 from mus.cortar import PoliticaCorte, valorar_corte
-from mus.evaluacion import resolver_mano
+from mus.evaluacion import Lance, resolver_mano
 from mus.reglas import ReglasMus, Variante
 from mus.senas import SENAS
 from mus.tablas import potencias_codigo
@@ -32,6 +32,8 @@ from mus.web import (
     tipo_mesa,
 )
 
+RAIZ = Path(__file__).resolve().parents[1]
+DATOS_VERSIONADOS = RAIZ / "web" / "public" / "datos"
 MESA = mesa_de(CORTA_CON_JUEGO, 20_000)
 CURVA = [(0.0, 1.0), (0.5, 0.4), (1.0, 0.1)]
 MANOS = [TABLA.indice(parsear_mano(m)) for m in ("R C 5 4", "A A 4 5")]
@@ -93,6 +95,8 @@ class TestDecisiones:
     def test_forma_y_casos_sin_calcular(self, decisiones):
         d = decisiones
         assert d.ventaja.shape == (330, 4) and d.opcion_diferencia.shape == (4, 3546)
+        assert d.p_habla.shape == (330, 4)
+        assert d.ventaja_lance.shape == d.radio_lance.shape == (330, 4, 5)
         calculadas = np.zeros(330, dtype=bool)
         calculadas[MANOS] = True
         assert np.isfinite(d.ventaja[calculadas]).all() and np.isnan(d.ventaja[~calculadas]).all()
@@ -122,12 +126,24 @@ class TestDecisiones:
             i = TD.opciones[h].index(o.opcion)
             assert d.opcion_diferencia[p - 1, tramo][i] == o.si_hay_mus_frente_a_la_mejor.media
         assert np.nanmax(d.opcion_diferencia[p - 1, tramo]) <= 1e-12  # la mejor, a cero
+        assert d.p_habla[h, p - 1] == ref.p_habla
+        assert list(d.ventaja_lance[h, p - 1]) == [e.media for e in ref.ventaja_por_lance]
+
+    def test_desglose_por_lance(self, decisiones):
+        d = decisiones
+        np.testing.assert_allclose(d.ventaja_lance[MANOS].sum(axis=2), d.ventaja[MANOS],
+                                   atol=1e-9)
+        assert (d.radio_lance[MANOS] >= 0).all() and np.isnan(d.radio_lance[0]).all()
+        assert (d.p_habla[MANOS, 0] == 1).all()                    # la mano habla siempre
+        assert ((0 < d.p_habla[MANOS, 1:]) & (d.p_habla[MANOS, 1:] < 1)).all()
 
     def test_cache(self, tmp_path):
         a = cargar_decisiones(MESA, 1.0, MANOS[:1], n=2_000, n_refinado=0, directorio=tmp_path)
         assert len(list(tmp_path.glob("web_*.npz"))) == 1
         b = cargar_decisiones(MESA, 1.0, MANOS[:1], n=2_000, n_refinado=0, directorio=tmp_path)
         np.testing.assert_array_equal(a.opcion_si_hay_mus, b.opcion_si_hay_mus)
+        np.testing.assert_array_equal(a.ventaja_lance, b.ventaja_lance)
+        np.testing.assert_array_equal(a.p_habla, b.p_habla)
         assert b.factor_corte == 1.0
 
     @pytest.mark.slow
@@ -200,6 +216,12 @@ class TestDatosWeb:
         assert decision["ventaja"][4 * h] is not None and decision["ventaja"][4 * h + 4] is None
         assert decision["repartos"][4 * h] == 2_000
         assert decision["decision"][4 * h] in (-1, 0, 1)
+        assert decision["p_habla"][4 * h] == ESCALA_PROBABILIDAD     # de mano
+        por_lance = f["por_lance"]
+        assert len(por_lance["ventaja"]) == len(por_lance["radio"]) == 1320 * 5
+        lances = por_lance["ventaja"][20 * h:20 * h + 5]
+        assert abs(sum(lances) - decision["ventaja"][4 * h]) <= 3    # redondeo de cada cifra
+        assert por_lance["ventaja"][20 * h + 20] is None
 
     def test_consultar_datos(self, datos):
         directorio = datos[0]
@@ -212,9 +234,13 @@ class TestDatosWeb:
         assert c.decision["repartos"] == 2_000 and c.decision["decision"] in (-1, 0, 1)
         validas = [o for o in c.opciones if o["si_hay_mus"] is not None]
         assert validas[0]["diferencia"] == 0 and len(c.opciones) == len(TD.opciones[h])
+        assert c.decision["p_habla"] == 1 and list(c.por_lance) == [l.value for l in Lance]
+        assert sum(v for v, _ in c.por_lance.values()) == pytest.approx(c.decision["ventaja"],
+                                                                        abs=0.003)
         # sin decisión precalculada (otra posición sí, otra mano no)
         otra = TABLA.manos[MANOS[1]].texto(TABLA.baraja)
-        assert consultar_datos(directorio, otra, 2, "se-corta").decision["ventaja"] is None
+        sin_dato = consultar_datos(directorio, otra, 2, "se-corta")
+        assert sin_dato.decision["ventaja"] is None and sin_dato.por_lance is None
 
     def test_consultar_con_senas(self, datos):
         directorio = datos[0]
@@ -242,7 +268,7 @@ class TestDatosWeb:
 @pytest.fixture(scope="module")
 def referencia(tmp_path_factory):
     directorio = tmp_path_factory.mktemp("referencia")
-    exportar_referencia(directorio, repartos=300)
+    exportar_referencia(directorio, repartos=300, datos=None)
     return {r.stem: leer(r) for r in directorio.glob("*.json")}
 
 
@@ -298,10 +324,17 @@ class TestReferencia:
 
 
 def test_cli_solo_referencia(tmp_path, capsys):
-    assert main(["exportar-web", "--solo-referencia", "--referencia", str(tmp_path)]) == 0
+    """La referencia del entrenador sale de los datos de la web que haya en --salida."""
+    assert main(["exportar-web", "--solo-referencia", "--referencia", str(tmp_path),
+                 "--salida", str(DATOS_VERSIONADOS)]) == 0
     assert {r.name for r in tmp_path.iterdir()} == {"evaluacion.json", "lances.json",
-                                                    "descartes.json"}
+                                                    "descartes.json", "entrenador.json"}
     assert "Referencia" in capsys.readouterr().out
+
+
+def test_referencia_sin_datos(tmp_path):
+    assert [r.name for r in exportar_referencia(tmp_path, repartos=50, datos=None)] == [
+        "evaluacion.json", "lances.json", "descartes.json"]
 
 
 def test_cli_rechaza_cuatro_reyes(tmp_path):
@@ -311,13 +344,13 @@ def test_cli_rechaza_cuatro_reyes(tmp_path):
 
 # --- Ficheros versionados en git -------------------------------------------------------------
 
-RAIZ = Path(__file__).resolve().parents[1]
-
-
 def test_referencia_versionada_al_dia(tmp_path):
-    """Si cambia el motor o el exportador, hay que regenerar los ficheros de referencia
-    (python -m mus exportar-web --solo-referencia): el núcleo en TypeScript se prueba con ellos."""
-    for ruta in exportar_referencia(tmp_path):
+    """Si cambia el motor, el exportador o los datos de la web, hay que regenerar los
+    ficheros de referencia (python -m mus exportar-web --solo-referencia): el núcleo en
+    TypeScript y el entrenador se prueban con ellos."""
+    escritos = exportar_referencia(tmp_path, datos=DATOS_VERSIONADOS)
+    assert len(escritos) == 4
+    for ruta in escritos:
         versionado = RAIZ / "web" / "test" / "referencia" / ruta.name
         assert versionado.read_bytes() == ruta.read_bytes(), f"{ruta.name} está desfasado"
 
@@ -326,7 +359,7 @@ def test_datos_versionados_integros_y_de_esta_version():
     import mus
     from mus import cortar, equity, tras_mus, web
 
-    directorio = RAIZ / "web" / "public" / "datos"
+    directorio = DATOS_VERSIONADOS
     assert comprobar_manifiesto(directorio) == []
     m = leer(directorio / "manifiesto.json")
     assert m["formato"] == web.FORMATO

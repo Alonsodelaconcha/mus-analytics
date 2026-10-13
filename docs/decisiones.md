@@ -890,3 +890,49 @@ Antes de que la instalara se publicó un arreglo: el enlace a las licencias de t
 - *Del pie al commit:* por el número de versión, no por el código: «0.1.1» → etiqueta `v0.1.1` → commit. De una huella no se puede volver atrás; por eso cada versión publicada lleva su etiqueta.
 
 **La confusión es razonable:** siete caracteres hexadecimales entre paréntesis parecen un commit abreviado. No se cambia ahora, porque cambiar el pie es publicar una versión; se decide con la próxima.
+
+## 2026-10-13 · Fase 5, paso 1: el motor y los datos del entrenador
+
+Plan, respuestas y cambios pedidos por el usuario: `docs/plan_fase5.md`. El trabajo va en la rama `entrenador` hasta la publicación.
+
+**El entrenador no calcula nada nuevo del juego.** Valora cada respuesta con las cifras que ya publica la web y con la misma regla que la calculadora: si la calculadora dice «Da igual» o «Casi igual que la mejor», no se pierde nada; si no, se pierde la diferencia con la mejor opción. `mus.entrenador` es esa regla en Python. Lee **solo los ficheros publicados**, con los mismos enteros que el navegador, y de él sale `web/test/referencia/entrenador.json`, que los tests de la web comparan sin tolerancia.
+
+**Dos cifras nuevas por mano y posición**, de la misma simulación con la mano fija (`valorar_corte`):
+- `p_habla`: probabilidad de que te toque hablar con esa mano, es decir, de que den mus todos los anteriores. Siendo mano vale 1.
+- La ventaja de dar mus **lance a lance** (grande, chica, pares, juego y punto), cada una con su intervalo de confianza. Suman la ventaja total.
+
+**Lo que ya publicaba la web no cambia.** El desglose se calcula con una función nueva (`tantos_netos_por_lance`) que, sumada, da bit a bit los tantos de siempre; hay un test que lo comprueba. Con las decisiones recalculadas:
+- los 12 campos que ya existían son idénticos, número a número, en las tres mesas (3 960 decisiones y 42 552 descartes);
+- los 20 ficheros de datos son los de la versión publicada (`v0.1.1`), salvo el campo `formato` y lo nuevo de las mesas.
+
+Formato de los datos: 2 (`web.FORMATO`); cálculo de las decisiones: versión 2 (`web.VERSION_DECISIONES`).
+
+**Coste del desglose por lance** (el usuario puso el límite en una hora de cálculo y 300 KB comprimidos):
+
+| Qué | Medido |
+|---|---|
+| Cálculo de las tres mesas (6 procesos) | 34 minutos |
+| Peso añadido a los ficheros de las mesas | 147 KB sin comprimir, 46 KB con gzip |
+| Todos los datos de la web | 3,06 MB sin comprimir, 727 KB con gzip |
+| Referencia para los tests (no se publica) | 389 KB |
+
+Queda dentro de los dos límites, así que se hizo sin preguntar. El margen de error de cada lance es pequeño: de mediana, ± 0,007 tantos en la mesa Normal.
+
+**Situaciones «como en la mesa» (cambio A).** Los pesos son productos de enteros, exactos también en JavaScript:
+- «¿Mus o corto?»: combinaciones de la mano × `p_habla`. En la mesa Normal salen de mano el 36 % de las veces, de segundo el 29 %, de tercero el 19 % y de postre el 16 %.
+- «¿Qué tiras?»: combinaciones × `p_habla` × probabilidad de que den mus los de después, y **solo si el entrenador no corta con esa mano**. Quien se entrena es quien decide con ella, y el modelo le supone la mejor respuesta; el λ de la mesa describe cuánto cortan los demás. Con R R C S no sale nunca. *El usuario pidió que «casi nunca» se llegara a descartar con ella: queda por confirmar que «nunca» le vale, antes del paso 4.*
+
+**Tantos por cada 100 manos de partida.** No en todas las manos toca decidir. En la mesa Normal se decide mus o corto en el 69 % de las manos (84 % si se da mucho mus, 55 % si se corta mucho), y se llega a descartar en el 19 %. El resumen multiplica lo perdido por decisión por esa fracción.
+
+**«Ajustadas».** Situaciones en que una opción es mejor de verdad, pero por menos de 0,20 tantos (2 cada 10 manos): 238 de las 1 320 en la mesa Normal. Las que dan igual quedan fuera: no enseñan nada, porque cualquier respuesta vale.
+
+**Comprobaciones:**
+- *Frente al cálculo exacto.* `p_habla` tiene valor combinatorio exacto. Se compara con él en las posiciones 2, 3 y 4 con una mesa de prueba, y en la 2 y la 3 con la política real de la mesa Normal.
+- *Lo publicado es lo que da el motor.* Repetir `valorar_corte` con la semilla del exportador reproduce la ventaja, el desglose y `p_habla` publicados.
+- *Casos testigo.* Dan en el entrenador el mismo veredicto que `python -m mus testigos`.
+- *A mano.* `python -m mus entrenador "7 7 4 4" --posicion 1` imprime lo que enseña la pantalla: «CORTA (claro)», 1,069 tantos perdidos si se da mus, y el porqué: en pares se pierden 1,30.
+
+**Alternativas descartadas:**
+- *Un fichero aparte para el entrenador, sin subir el formato.* Los ficheros existentes habrían quedado byte a byte iguales. Se descartó porque el desglose es una propiedad de la decisión y también le sirve a la calculadora; la comprobación de que nada cambia se hizo comparando campo a campo.
+- *`p_habla` exacta en vez de simulada.* De postre exige recorrer las manos de tres jugadores para cada una de las 330. La simulada tiene un error típico menor de 0,002 y solo se usa para sortear.
+- *Usar el λ de la mesa también para la propia mano.* Supondría que en la mesa Normal se da mus con R R C S el 37 % de las veces.
